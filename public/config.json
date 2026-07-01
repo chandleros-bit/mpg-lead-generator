@@ -1,0 +1,25 @@
+{
+  "search": {
+    "location": "29.9691,-95.6972",
+    "radius_meters": 15000,
+    "verticals": ["restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"],
+    "batch_size": 60,
+    "score_threshold": 55
+  },
+  "personal": {
+    "name": "Chandler Atkinson",
+    "company": "Media Payments Group",
+    "callback_number": "(555) 555-5555",
+    "email": "you@example.com",
+    "canspam_footer": {
+      "business_address": "123 Example St, Cypress, TX 77433",
+      "optout_line": "Reply STOP or email you@example.com to opt out of further messages."
+    }
+  },
+  "weights": {
+    "displacement": {"dissatisfaction_max": 35, "keyword_pain_max": 12, "tech_max": 20, "volume_max": 20, "icp_tiebreak": 3},
+    "greenfield": {"recency_max": 40, "volume_potential_max": 30, "setup_gap_max": 27, "icp_tiebreak": 3},
+    "buckets": {"hot": 70, "warm": 40},
+    "greenfield_review_cutoff": 8
+  }
+}
