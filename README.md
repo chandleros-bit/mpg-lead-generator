@@ -34,6 +34,36 @@ merchants so you can see the whole dashboard before wiring up your key.
 
 Click **Refresh leads** to pull and score a fresh batch.
 
+## Deploying to Netlify (hosted, remote access)
+
+This repo also ships as a Netlify app: a static dashboard plus one Netlify
+Function (`netlify/functions/leads.js`) that replaces the Flask route. The
+scoring/campaign/fetch logic lives in `lib/` as a JavaScript port of the Python
+modules, covered by tests you can run with `node --test`.
+
+### Local development
+
+```bash
+npx netlify dev          # serves public/ + the function locally
+```
+
+Open `http://localhost:8888/?demo=1` for demo mode (no key, no passphrase).
+Omit `?demo=1` for live mode (prompts for the passphrase).
+
+### Deploy
+
+1. Push this repo to GitHub and create a Netlify site from it (build command:
+   none; publish directory: `public`).
+2. In **Site settings → Environment variables**, set:
+   - `GOOGLE_PLACES_API_KEY` — your Places API (New) key.
+   - `APP_PASSPHRASE` — the passphrase that unlocks live lead-fetching.
+3. Visit your site. Demo mode is at `/?demo=1`; live mode is the default and
+   prompts for the passphrase (stored in your browser after the first entry).
+
+Edit search area, verticals, weights, and your personal/CAN-SPAM details in
+`config.json` (and `public/config.json`), then push to redeploy. Secrets stay
+in Netlify env vars — never in the repo.
+
 ## Using the dashboard
 
 - **Score readout** (left of each card) is color-coded: red = Hot, amber = Warm,
