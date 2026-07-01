@@ -9,11 +9,11 @@
   "personal": {
     "name": "Chandler Atkinson",
     "company": "Media Payments Group",
-    "callback_number": "(555) 555-5555",
-    "email": "you@example.com",
+    "callback_number": "(713) 228-7060",
+    "email": "chandler@mpg.com",
     "canspam_footer": {
       "business_address": "123 Example St, Cypress, TX 77433",
-      "optout_line": "Reply STOP or email you@example.com to opt out of further messages."
+      "optout_line": "Reply STOP or email chandler@mpg.com to opt out of further messages."
     }
   },
   "weights": {
