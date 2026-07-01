@@ -1,0 +1,10 @@
+{
+  "name": "mpg-lead-generator-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "netlify dev"
+  }
+}
