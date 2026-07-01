@@ -1,0 +1,15 @@
+# Local config with personal details / secrets
+config.yaml
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node (for the upcoming Netlify port)
+node_modules/
+.netlify/
+
+# Env
+.env
+.env.*
