@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import {
   parsePlacesResponse, dedupe, normalizeCategory, loadDemoBusinesses,
-  fetchNearby, PRICE_LEVELS, verticalsToPlaceTypes,
+  fetchNearby, PRICE_LEVELS, verticalsToPlaceTypes, fetchAllVerticals,
 } from "../lib/fetcher.js";
 
 const require = createRequire(import.meta.url);
@@ -110,4 +110,45 @@ test("fetchNearby throws after exhausting 429 retries", async () => {
   } finally {
     globalThis.fetch = orig;
   }
+});
+
+test("fetchAllVerticals dedupes across verticals and tags category", async () => {
+  const orig = globalThis.fetch;
+  const one = { places: [{ id: "X", displayName: { text: "Co" }, primaryType: "restaurant", formattedAddress: "1 St" }] };
+  globalThis.fetch = async () => new Response(JSON.stringify(one), { status: 200 });
+  try {
+    const out = await fetchAllVerticals({
+      apiKey: "k", location: "1,2", radiusMeters: 1000, verticals: ["salon", "restaurant"], maxResults: 20,
+    });
+    assert.equal(out.length, 1);          // same place_id from both verticals → deduped
+    assert.equal(out[0].category, "salon"); // first vertical that found it wins the tag
+  } finally { globalThis.fetch = orig; }
+});
+
+test("fetchAllVerticals skips a failing vertical and keeps the rest", async () => {
+  const orig = globalThis.fetch;
+  let n = 0;
+  globalThis.fetch = async () => {
+    n++;
+    if (n === 1) throw new Error("boom"); // first vertical's call fails
+    return new Response(JSON.stringify({ places: [{ id: "Y", displayName: { text: "Co" }, primaryType: "cafe", formattedAddress: "2 St" }] }), { status: 200 });
+  };
+  try {
+    const out = await fetchAllVerticals({
+      apiKey: "k", location: "1,2", radiusMeters: 1000, verticals: ["salon", "cafe"], maxResults: 20,
+    });
+    assert.equal(out.length, 1);
+    assert.equal(out[0].category, "cafe");
+  } finally { globalThis.fetch = orig; }
+});
+
+test("fetchAllVerticals throws when every vertical fails", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("down"); };
+  try {
+    await assert.rejects(
+      () => fetchAllVerticals({ apiKey: "k", location: "1,2", radiusMeters: 1000, verticals: ["salon", "cafe"] }),
+      /All vertical searches failed/,
+    );
+  } finally { globalThis.fetch = orig; }
 });
