@@ -279,3 +279,34 @@ body {
   .search-params { padding-left: 18px; padding-right: 18px; }
   .field input { min-width: 0; width: 100%; }
 }
+
+/* ---------- Who-to-ask-for research panel ---------- */
+.btn-research-open {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 14px; color: var(--ink);
+  transition: border-color .12s ease;
+}
+.btn-research-open:hover { border-color: #CFC9BB; }
+.btn-research-open[aria-expanded="true"] { background: var(--ink); color: #F3F1EC; border-color: var(--ink); }
+
+.research { display: none; border-top: 1px dashed var(--line); background: var(--receipt); }
+.research.open { display: block; }
+.research-inner {
+  max-width: 560px; margin: 0 auto; padding: 18px 26px 22px;
+  font-family: "JetBrains Mono", monospace;
+}
+.research-head {
+  text-align: center; font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--muted);
+  padding-bottom: 14px; border-bottom: 1px dashed var(--line); margin-bottom: 16px;
+}
+.research-links { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.research-link {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 14px; color: var(--ink); text-decoration: none;
+  transition: border-color .12s ease;
+}
+.research-link:hover { border-color: #CFC9BB; }
+.research-link.copied { background: var(--ink); color: #F3F1EC; border-color: var(--ink); }
