@@ -255,3 +255,27 @@ body {
 }
 
 :focus-visible { outline: 2px solid var(--approve); outline-offset: 2px; }
+
+/* ---------- Search params ---------- */
+.search-params {
+  display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end;
+  padding: 16px 28px 0;
+}
+.field {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted);
+}
+.field-unit { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+.field-unit input { width: 84px; }
+.field input {
+  font: inherit; text-transform: none; letter-spacing: normal; color: var(--ink);
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+  min-width: 220px;
+}
+.field-unit input { min-width: 0; }
+.field input:disabled { opacity: .55; cursor: not-allowed; }
+@media (max-width: 720px) {
+  .search-params { padding-left: 18px; padding-right: 18px; }
+  .field input { min-width: 0; width: 100%; }
+}

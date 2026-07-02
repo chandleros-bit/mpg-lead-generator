@@ -1,10 +1,12 @@
 (function () {
   "use strict";
 
-  var state = { leads: [], filter: "all", sort: "score", query: "", threshold: 40 };
+  var state = { leads: [], filter: "all", sort: "score", query: "", threshold: 40, verticals: [] };
 
   var DEMO = new URLSearchParams(location.search).get("demo") === "1";
   var PASS_KEY = "mpg_pass";
+  var LOC_KEY = "mpg_loc";
+  var MILES_KEY = "mpg_miles";
 
   function getPass() { return localStorage.getItem(PASS_KEY) || ""; }
   function ensurePass() {
@@ -16,7 +18,20 @@
     return p;
   }
 
+  function milesFromMeters(m) { return Math.max(1, Math.round(m / 1609.344)); }
+
+  function setContext(verticals, miles) {
+    document.getElementById("context").innerHTML =
+      "Searching <strong>" + esc(verticals.join(", ")) + "</strong> within " +
+      "<strong>" + esc(miles) + " mi</strong>. Target score <strong>" + state.threshold +
+      "+</strong>. Leads below target sit under the divider.";
+  }
+
   function initShell() {
+    if (DEMO) { el.locInput.disabled = true; el.milesInput.disabled = true; }
+    var savedLoc = localStorage.getItem(LOC_KEY);
+    if (savedLoc) el.locInput.value = savedLoc;
+    var savedMiles = localStorage.getItem(MILES_KEY);
     fetch("config.json")
       .then(function (r) { return r.json(); })
       .then(function (cfg) {
@@ -25,11 +40,10 @@
         var op = document.getElementById("operator");
         if (cfg.personal.name) { op.textContent = cfg.personal.name; op.hidden = false; }
         state.threshold = cfg.search.score_threshold || 40;
-        var km = (cfg.search.radius_meters / 1000).toFixed(1);
-        document.getElementById("context").innerHTML =
-          "Searching <strong>" + esc(cfg.search.verticals.join(", ")) + "</strong> within " +
-          "<strong>" + km + " km</strong>. Target score <strong>" + state.threshold +
-          "+</strong>. Leads below target sit under the divider.";
+        state.verticals = cfg.search.verticals || [];
+        var miles = savedMiles || String(milesFromMeters(cfg.search.radius_meters));
+        el.milesInput.value = miles;
+        setContext(state.verticals, miles);
       })
       .catch(function () { /* shell is best-effort; leads still load */ });
   }
@@ -48,6 +62,8 @@
     refresh: document.getElementById("refresh"),
     search: document.getElementById("search"),
     sort: document.getElementById("sort"),
+    locInput: document.getElementById("loc-input"),
+    milesInput: document.getElementById("miles-input"),
   };
 
   function esc(s) {
@@ -177,9 +193,20 @@
     el.leads.innerHTML = '<div class="state">Scoring leads…</div>';
     el.refresh.disabled = true;
 
-    var url = DEMO ? "/api/leads?demo=1" : "/api/leads";
+    var url;
     var opts = {};
-    if (!DEMO) {
+    if (DEMO) {
+      url = "/api/leads?demo=1";
+    } else {
+      var loc = el.locInput.value.trim();
+      var miles = el.milesInput.value.trim();
+      if (loc) { localStorage.setItem(LOC_KEY, loc); } else { localStorage.removeItem(LOC_KEY); }
+      if (miles) { localStorage.setItem(MILES_KEY, miles); }
+      var qs = [];
+      if (loc) qs.push("location=" + encodeURIComponent(loc));
+      if (miles) qs.push("miles=" + encodeURIComponent(miles));
+      url = "/api/leads" + (qs.length ? "?" + qs.join("&") : "");
+      if (state.verticals.length) setContext(state.verticals, miles || el.milesInput.value);
       var p = ensurePass();
       opts.headers = { "X-App-Passphrase": p };
     }
