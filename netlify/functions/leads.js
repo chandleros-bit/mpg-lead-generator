@@ -74,10 +74,10 @@ export default async function handler(req) {
     return json({ error: `Fetch failed: ${e.message}` }, 502);
   }
 
-  const rows = buildLeads(cfgDict(cfg), businesses);
+  const { rows, chainsFiltered } = buildLeads(cfgDict(cfg), businesses);
   return json({
     leads: rows,
-    summary: summarize(rows),
+    summary: { ...summarize(rows), chainsFiltered },
     demo,
     threshold: cfg.search.score_threshold ?? 40,
   });

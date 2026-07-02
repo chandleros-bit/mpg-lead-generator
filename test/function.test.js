@@ -13,6 +13,7 @@ test("demo request returns leads + summary, no passphrase needed", async () => {
   assert.equal(d.demo, true);
   assert.ok(d.leads.length > 0);
   assert.equal(d.summary.total, d.leads.length);
+  assert.equal(typeof d.summary.chainsFiltered, "number");
   assert.equal(typeof d.threshold, "number");
 });
 
