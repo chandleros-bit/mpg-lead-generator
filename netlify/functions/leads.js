@@ -1,5 +1,6 @@
 import { loadConfig, cfgDict } from "../../lib/config.js";
-import { fetchNearby, loadDemoBusinesses } from "../../lib/fetcher.js";
+import { fetchAllVerticals, loadDemoBusinesses } from "../../lib/fetcher.js";
+import { geocodeAddress, looksLikeCoords } from "../../lib/geocode.js";
 import { buildLeads, summarize } from "../../lib/pipeline.js";
 
 // Netlify Functions v2: route /api/leads directly to this function.
@@ -10,6 +11,18 @@ function json(obj, status = 200) {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+const METERS_PER_MILE = 1609.344;
+const MAX_RADIUS_METERS = 50000; // Google searchNearby hard cap
+
+// Parse the miles param → radius in meters. Blank/invalid falls back to the
+// config default; valid values are clamped to 1–25 mi then to the API cap.
+function milesToMeters(milesParam, fallbackMeters) {
+  const n = Number(milesParam);
+  if (!milesParam || Number.isNaN(n)) return fallbackMeters;
+  const clamped = Math.min(25, Math.max(1, n));
+  return Math.min(MAX_RADIUS_METERS, Math.round(clamped * METERS_PER_MILE));
 }
 
 export default async function handler(req) {
@@ -33,11 +46,27 @@ export default async function handler(req) {
       businesses = loadDemoBusinesses();
     } else {
       const s = cfg.search;
-      businesses = await fetchNearby({
+      const rawLoc = (url.searchParams.get("location") || "").trim();
+      const radiusMeters = milesToMeters(url.searchParams.get("miles"), s.radius_meters);
+
+      let location = s.location;
+      if (rawLoc) {
+        if (looksLikeCoords(rawLoc)) {
+          location = rawLoc;
+        } else {
+          const geo = await geocodeAddress(cfg.apiKey, rawLoc);
+          if (!geo) {
+            return json({ error: "Couldn't find that location — try a ZIP or city." }, 400);
+          }
+          location = geo;
+        }
+      }
+
+      businesses = await fetchAllVerticals({
         apiKey: cfg.apiKey,
-        location: s.location,
-        radiusMeters: s.radius_meters,
-        includedTypes: s.verticals,
+        location,
+        radiusMeters,
+        verticals: s.verticals,
         maxResults: s.batch_size ?? 20,
       });
     }
