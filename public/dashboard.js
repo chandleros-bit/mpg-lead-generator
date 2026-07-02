@@ -1,3 +1,5 @@
+import { buildResearchLinks } from "./research.js";
+
 (function () {
   "use strict";
 
@@ -112,6 +114,26 @@
     );
   }
 
+  function researchLinkEl(link) {
+    if (link.copyName) {
+      // Comptroller: a button so the handler can copy-then-open with a confirmation.
+      return '<button class="research-link" type="button" data-href="' + esc(link.href) +
+        '" data-copy-name="' + esc(link.copyName) + '">' + esc(link.label) + "</button>";
+    }
+    return '<a class="research-link" href="' + esc(link.href) +
+      '" target="_blank" rel="noopener">' + esc(link.label) + "</a>";
+  }
+
+  function researchPanel(lead) {
+    var links = buildResearchLinks(lead).map(researchLinkEl).join("");
+    return (
+      '<div class="research-inner">' +
+        '<div class="research-head">Who to ask for · research before you call</div>' +
+        '<div class="research-links">' + links + "</div>" +
+      "</div>"
+    );
+  }
+
   function card(lead) {
     var below = lead.score < state.threshold ? " below-target" : "";
     var meta = [esc(lead.category)];
@@ -135,10 +157,12 @@
           "</div>" +
           '<div class="lead-actions">' +
             '<span class="track-tag ' + trackCls + '">' + esc(lead.track) + "</span>" +
+            '<button class="btn-research-open" type="button" aria-expanded="false">Who to ask for</button>' +
             '<button class="btn-copy-open" type="button" aria-expanded="false">Outreach</button>' +
           "</div>" +
         "</div>" +
         '<div class="receipt">' + receipt(lead.campaign) + "</div>" +
+        '<div class="research">' + researchPanel(lead) + "</div>" +
       "</article>"
     );
   }
@@ -245,6 +269,23 @@
       var panel = openBtn.closest(".lead-card").querySelector(".receipt");
       var open = panel.classList.toggle("open");
       openBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      return;
+    }
+    var researchBtn = e.target.closest(".btn-research-open");
+    if (researchBtn) {
+      var rpanel = researchBtn.closest(".lead-card").querySelector(".research");
+      var ropen = rpanel.classList.toggle("open");
+      researchBtn.setAttribute("aria-expanded", ropen ? "true" : "false");
+      return;
+    }
+    var compBtn = e.target.closest(".research-link[data-copy-name]");
+    if (compBtn) {
+      navigator.clipboard.writeText(compBtn.getAttribute("data-copy-name"));
+      window.open(compBtn.getAttribute("data-href"), "_blank", "noopener");
+      var oldTxt = compBtn.textContent;
+      compBtn.textContent = "Name copied → paste";
+      compBtn.classList.add("copied");
+      setTimeout(function () { compBtn.textContent = oldTxt; compBtn.classList.remove("copied"); }, 1600);
       return;
     }
     var copyBtn = e.target.closest(".btn-copy");
