@@ -253,6 +253,14 @@ import { buildResearchLinks } from "./research.js";
         state.threshold = res.d.threshold || 40;
         setModeBadge(res.d.demo);
         paintStats(res.d.summary);
+        var cf = (res.d.summary && res.d.summary.chainsFiltered) || 0;
+        if (state.verticals.length) {
+          setContext(state.verticals, el.milesInput.value);
+          if (cf > 0) {
+            document.getElementById("context").innerHTML +=
+              " · <strong>" + cf + "</strong> chain" + (cf === 1 ? "" : "s") + " filtered";
+          }
+        }
         render();
       })
       .catch(function (e) {

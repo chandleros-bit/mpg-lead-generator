@@ -4,7 +4,15 @@
     "radius_meters": 15000,
     "verticals": ["restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"],
     "batch_size": 20,
-    "score_threshold": 55
+    "score_threshold": 55,
+    "exclude_chains": [
+      "Starbucks", "Dunkin", "Dunkin Donuts", "McDonald's", "Subway", "Chipotle",
+      "Chili's", "Applebee's", "Olive Garden", "Panera", "Sonic Drive-In",
+      "Whataburger", "Jack in the Box", "Taco Bell", "Wendy's", "Burger King",
+      "Great Clips", "Supercuts", "Sport Clips", "Fantastic Sams",
+      "Jiffy Lube", "Take 5", "Valvoline", "Firestone", "Discount Tire",
+      "AT&T", "T-Mobile", "Verizon", "GNC", "GameStop", "Massage Envy"
+    ]
   },
   "personal": {
     "name": "Chandler Atkinson",
