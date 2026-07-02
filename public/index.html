@@ -27,6 +27,15 @@
     <p class="context-line" id="context"></p>
   </section>
 
+  <section class="search-params" id="search-params">
+    <label class="field">Location
+      <input id="loc-input" type="text" placeholder="ZIP or city — blank uses default" autocomplete="off">
+    </label>
+    <label class="field">Distance
+      <span class="field-unit"><input id="miles-input" type="number" min="1" max="25" step="1" value="9"> mi</span>
+    </label>
+  </section>
+
   <section class="stats" id="stats" hidden>
     <div class="stat"><span class="stat-num" id="stat-hot">0</span><span class="stat-label">Hot</span></div>
     <div class="stat"><span class="stat-num" id="stat-warm">0</span><span class="stat-label">Warm</span></div>

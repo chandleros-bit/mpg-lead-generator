@@ -63,3 +63,58 @@ test("fetch failure surfaces as 502", async () => {
     globalThis.fetch = orig;
   }
 });
+
+test("address location is geocoded before searching", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  let placesBody = null;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("maps/api/geocode")) {
+      return new Response(JSON.stringify({ status: "OK", results: [{ geometry: { location: { lat: 40, lng: -70 } } }] }), { status: 200 });
+    }
+    placesBody = JSON.parse(opts.body);
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?location=77433&miles=5", { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 200);
+    assert.equal(placesBody.locationRestriction.circle.center.latitude, 40);
+    assert.equal(placesBody.locationRestriction.circle.radius, Math.round(5 * 1609.344));
+  } finally { globalThis.fetch = orig; }
+});
+
+test("unresolvable location returns 400", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("maps/api/geocode")) {
+      return new Response(JSON.stringify({ status: "ZERO_RESULTS", results: [] }), { status: 200 });
+    }
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?location=zzzzz", { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 400);
+  } finally { globalThis.fetch = orig; }
+});
+
+test("coordinate location skips geocoding", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  let geocodeCalled = false;
+  let placesBody = null;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("maps/api/geocode")) { geocodeCalled = true; return new Response("{}", { status: 200 }); }
+    placesBody = JSON.parse(opts.body);
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?location=40,-70", { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 200);
+    assert.equal(geocodeCalled, false);
+    assert.equal(placesBody.locationRestriction.circle.center.latitude, 40);
+  } finally { globalThis.fetch = orig; }
+});
