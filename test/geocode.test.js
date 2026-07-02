@@ -34,3 +34,30 @@ test("geocodeAddress throws on HTTP error", async () => {
     await assert.rejects(() => geocodeAddress("k", "x"), /Geocoding API error 500/);
   } finally { globalThis.fetch = orig; }
 });
+
+// The Geocoding API returns HTTP 200 with an in-body status like REQUEST_DENIED
+// when the key isn't authorized for it. That must surface the real reason, not be
+// masked as a "not found" null (which the caller would turn into a misleading 400).
+test("geocodeAddress throws with the real status/message on REQUEST_DENIED", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({
+      status: "REQUEST_DENIED",
+      error_message: "This API project is not authorized to use this API.",
+    }), { status: 200 });
+  try {
+    await assert.rejects(
+      () => geocodeAddress("k", "77433"),
+      /REQUEST_DENIED.*not authorized to use this API/,
+    );
+  } finally { globalThis.fetch = orig; }
+});
+
+test("geocodeAddress still returns null when status is OK but results are empty", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ status: "OK", results: [] }), { status: 200 });
+  try {
+    assert.equal(await geocodeAddress("k", "nowhere"), null);
+  } finally { globalThis.fetch = orig; }
+});

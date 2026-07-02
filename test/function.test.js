@@ -118,3 +118,24 @@ test("coordinate location skips geocoding", async () => {
     assert.equal(placesBody.locationRestriction.circle.center.latitude, 40);
   } finally { globalThis.fetch = orig; }
 });
+
+test("geocoder REQUEST_DENIED surfaces as 502 with the real reason, not a 400", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("maps/api/geocode")) {
+      return new Response(JSON.stringify({
+        status: "REQUEST_DENIED",
+        error_message: "This API project is not authorized to use this API.",
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?location=77433", { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 502);
+    const d = await res.json();
+    assert.match(d.error, /REQUEST_DENIED/);
+  } finally { globalThis.fetch = orig; }
+});
