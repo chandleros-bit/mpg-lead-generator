@@ -3,7 +3,7 @@
     "location": "29.9691,-95.6972",
     "radius_meters": 15000,
     "verticals": ["restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"],
-    "batch_size": 60,
+    "batch_size": 20,
     "score_threshold": 55
   },
   "personal": {
