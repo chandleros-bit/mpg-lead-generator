@@ -11,8 +11,9 @@
       "Whataburger", "Jack in the Box", "Taco Bell", "Wendy's", "Burger King",
       "Great Clips", "Supercuts", "Sport Clips", "Fantastic Sams",
       "Jiffy Lube", "Take 5 Oil Change", "Valvoline", "Firestone Complete Auto Care",
-      "Massage Envy", "Ulta Beauty"
-    ]
+      "Massage Envy", "Ulta Beauty", "Love's Travel Stop"
+    ],
+    "exclude_domains": ["loves.com"]
   },
   "personal": {
     "name": "Chandler Atkinson",
@@ -25,9 +26,17 @@
     }
   },
   "weights": {
-    "displacement": {"dissatisfaction_max": 35, "keyword_pain_max": 12, "tech_max": 20, "volume_max": 20, "icp_tiebreak": 3},
+    "displacement": {"dissatisfaction_max": 35, "keyword_pain_max": 12, "tech_max": 20, "volume_max": 20, "processor_max": 25, "icp_tiebreak": 3},
     "greenfield": {"recency_max": 40, "volume_potential_max": 30, "setup_gap_max": 27, "icp_tiebreak": 3},
     "buckets": {"hot": 70, "warm": 40},
     "greenfield_review_cutoff": 8
+  },
+  "sources": {
+    "tabc": { "enabled": true, "counties": ["Harris", "Fort Bend"], "since_days": 120, "app_token_env": "TABC_APP_TOKEN" }
+  },
+  "enrichment": {
+    "global_budget_ms": 6000,
+    "processor_detection": { "enabled": true, "max_sites": 25, "fetch_timeout_ms": 3000, "check_checkout_page": true },
+    "owner": { "enabled": true, "max_sites": 10, "fetch_timeout_ms": 3000 }
   }
 }
