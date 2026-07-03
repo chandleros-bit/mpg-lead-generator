@@ -77,7 +77,8 @@ import { buildResearchLinks } from "./research.js";
   function isSignal(reason) {
     var r = reason.toLowerCase();
     return r.indexOf("complaint") >= 0 || r.indexOf("no website") >= 0 ||
-           r.indexOf("surcharge") >= 0 || r.indexOf("cash only") >= 0;
+           r.indexOf("surcharge") >= 0 || r.indexOf("cash only") >= 0 ||
+           r.indexOf("detected on site") >= 0;
   }
 
   function whyChips(why) {
@@ -124,11 +125,21 @@ import { buildResearchLinks } from "./research.js";
       '" target="_blank" rel="noopener">' + esc(link.label) + "</a>";
   }
 
+  function ownerLine(lead) {
+    var o = lead.owner;
+    if (!o || (!o.name && !o.email)) return "";
+    var bits = [];
+    if (o.name) bits.push("<strong>" + esc(o.name) + "</strong>" + (o.title ? " · " + esc(o.title) : ""));
+    if (o.email) bits.push('<a href="mailto:' + esc(o.email) + '">' + esc(o.email) + "</a>");
+    return '<div class="research-owner">Owner: ' + bits.join(" · ") + "</div>";
+  }
+
   function researchPanel(lead) {
     var links = buildResearchLinks(lead).map(researchLinkEl).join("");
     return (
       '<div class="research-inner">' +
         '<div class="research-head">Who to ask for · research before you call</div>' +
+        ownerLine(lead) +
         '<div class="research-links">' + links + "</div>" +
       "</div>"
     );
