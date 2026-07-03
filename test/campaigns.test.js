@@ -33,3 +33,20 @@ test("footer present and no unrendered tokens", () => {
   assert.ok(!c.email1_body.includes("{") && !c.email1_body.includes("}"));
   assert.ok(!c.voicemail.includes("{") && !c.voicemail.includes("}"));
 });
+
+function leadWith(owner) {
+  return {
+    track: "displacement",
+    business: { place_id: "p1", name: "Joes Cafe", category: "cafe", owner },
+  };
+}
+
+test("greeting uses the owner's first name when known", () => {
+  const c = generateCampaign(leadWith({ name: "Jane Smith" }), PERSONAL);
+  assert.ok(c.email1_body.startsWith("Hi Jane,"));
+});
+
+test("greeting falls back to the business team when no owner", () => {
+  const c = generateCampaign(leadWith(null), PERSONAL);
+  assert.ok(c.email1_body.startsWith("Hi Joes Cafe team,"));
+});
