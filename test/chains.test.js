@@ -43,3 +43,25 @@ test("isChain returns false for empty brand list or empty name", () => {
   assert.equal(isChain("", BRANDS), false);
   assert.equal(isChain(null, BRANDS), false);
 });
+
+import { normalizeDomain, isChainDomain } from "../lib/chains.js";
+
+test("normalizeDomain strips scheme, www, and path", () => {
+  assert.equal(normalizeDomain("https://www.Loves.com/stores/123"), "loves.com");
+  assert.equal(normalizeDomain("http://order.toasttab.com"), "order.toasttab.com");
+  assert.equal(normalizeDomain(""), "");
+  assert.equal(normalizeDomain(null), "");
+});
+
+test("isChainDomain matches exact domain and subdomains", () => {
+  const domains = ["loves.com"];
+  assert.equal(isChainDomain("https://www.loves.com", domains), true);
+  assert.equal(isChainDomain("https://stores.loves.com/tx", domains), true);
+  assert.equal(isChainDomain("https://joestacos.com", domains), false);
+});
+
+test("isChainDomain is false for empty inputs", () => {
+  assert.equal(isChainDomain("", ["loves.com"]), false);
+  assert.equal(isChainDomain("https://loves.com", []), false);
+  assert.equal(isChainDomain(null, ["loves.com"]), false);
+});
