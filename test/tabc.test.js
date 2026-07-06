@@ -9,21 +9,24 @@ const SAMPLE = require("./fixtures/tabc_sample.json");
 
 test("parseTabcRows maps rows into greenfield-shaped businesses", () => {
   const out = parseTabcRows(SAMPLE);
-  assert.equal(out.length, 2); // the third row has no name → skipped
+  assert.equal(out.length, 2); // off-premise BQ + the no-name row are skipped
   const first = out[0];
   assert.equal(first.name, "Bayou Craft Taproom");
   assert.equal(first.category, "bar");
   assert.equal(first.source, "tabc");
   assert.equal(first.review_count, 0);
   assert.equal(first.website, null);
-  assert.equal(first.licensed_on, "2026-06-15");
+  assert.equal(first.licensed_on, "2026-06-15"); // ISO timestamp trimmed to date
   assert.ok(first.place_id.startsWith("tabc:"));
-  assert.ok(first.address.includes("77433"));
+  assert.ok(first.address.includes("77433")); // ZIP+4 trimmed to 5 digits
 });
 
-test("parseTabcRows categorizes wine/beer as bar and others as restaurant", () => {
+test("parseTabcRows maps on-premise codes and drops off-premise retail", () => {
   const out = parseTabcRows(SAMPLE);
-  assert.equal(out[1].category, "bar");
+  assert.equal(out[0].category, "bar"); // MB — mixed beverage, on-premise
+  assert.equal(out[1].category, "restaurant"); // BG — wine & malt retailer
+  // BQ (off-premise convenience/grocery) is not ICP and must be excluded.
+  assert.ok(!out.some((b) => b.name.includes("Shop n Go")));
 });
 
 test("parseTabcRows tolerates a non-array input", () => {

@@ -109,9 +109,12 @@ Buckets: Hot ≥ 70, Warm 40–69, Cold < 40. Tune all weights in `config.yaml`.
   negatives are common (sites that hide the processor, or use one we can't see
   from the front end); a *missing* badge is not proof of no processor.
 - **TABC greenfield = confirmed new alcohol license.** New bars/restaurants pulled
-  from the Texas open-data TABC feed are genuinely newly licensed; "no processor
-  yet" is still *inferred*. TABC is filtered by county, so results may fall
-  slightly outside your exact search radius.
+  from the Texas open-data TABC feed (dataset `7hf9-qc9f`, "TABC License
+  Information") are genuinely newly licensed; "no processor yet" is still
+  *inferred*. Only **on-premise** license types are kept (MB/BE → bar,
+  BG/RM → restaurant); off-premise retail permits (BQ/Q — convenience, grocery,
+  package stores) are excluded as out-of-ICP. TABC is filtered by county, so
+  results may fall slightly outside your exact search radius.
 - **Owner enrichment = best-effort.** Names/emails are scraped from the lead's own
   About/Team/Contact pages and may be missing or wrong; they are surfaced for you
   to contact manually — still generate-only.
