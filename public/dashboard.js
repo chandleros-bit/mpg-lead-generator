@@ -1,4 +1,5 @@
 import { buildResearchLinks } from "./research.js";
+import { leadsToCsv } from "./csv.js";
 
 (function () {
   "use strict";
@@ -66,6 +67,7 @@ import { buildResearchLinks } from "./research.js";
     sort: document.getElementById("sort"),
     locInput: document.getElementById("loc-input"),
     milesInput: document.getElementById("miles-input"),
+    downloadCsv: document.getElementById("download-csv"),
   };
 
   function esc(s) {
@@ -330,6 +332,24 @@ import { buildResearchLinks } from "./research.js";
   el.search.addEventListener("input", function () { state.query = el.search.value.toLowerCase().trim(); render(); });
   el.sort.addEventListener("change", function () { state.sort = el.sort.value; render(); });
   el.refresh.addEventListener("click", load);
+
+  // Download the current (filtered/sorted/searched) view as a CSV the user can
+  // open in a spreadsheet. No-op when the view is empty so we never save a
+  // header-only file by accident.
+  function downloadCsv() {
+    var rows = visibleLeads();
+    if (!rows.length) return;
+    var blob = new Blob([leadsToCsv(rows)], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = "mpg-leads-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  el.downloadCsv.addEventListener("click", downloadCsv);
 
   initShell();
   load();
