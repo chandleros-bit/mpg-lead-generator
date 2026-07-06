@@ -5,6 +5,7 @@ import {
   volumePoints, recencyPoints, volumePotentialPoints, setupGapPoints, scoreBusiness,
 } from "../lib/scoring.js";
 import { ICP, WEIGHTS, makeBusiness } from "./helpers.js";
+import { processorPoints } from "../lib/scoring.js";
 
 // ---------- classification ----------
 test("out of ICP is low_fit", () => {
@@ -85,4 +86,24 @@ test("fresh taqueria is hot greenfield", () => {
 test("score clamps to 100", () => {
   const b = makeBusiness({ category: "restaurant", review_count: 0, website: null, price_level: 4 });
   assert.ok(scoreBusiness(b, WEIGHTS, ICP).score <= 100);
+});
+
+test("processorPoints awards full weight only when a processor was detected", () => {
+  assert.equal(processorPoints(["Square"], 25), 25);
+  assert.equal(processorPoints([], 25), 0);
+  assert.equal(processorPoints(undefined, 25), 0);
+});
+
+test("a detected processor raises the displacement score and adds a why-chip", () => {
+  const base = makeBusiness({ category: "cafe", rating: 4.0, review_count: 150, website: "http://c.com", price_level: 2 });
+  const withProc = makeBusiness({ category: "cafe", rating: 4.0, review_count: 150, website: "http://c.com", price_level: 2, processor: ["Square"] });
+  const a = scoreBusiness(base, WEIGHTS, ICP);
+  const b = scoreBusiness(withProc, WEIGHTS, ICP);
+  assert.ok(b.score > a.score);
+  assert.ok(b.why.some((w) => w.includes("Square detected on site")));
+});
+
+test("processor signal outweighs the keyword-pain signal", () => {
+  // processor_max (25) must exceed keyword_pain_max (12)
+  assert.ok(WEIGHTS.displacement.processor_max > WEIGHTS.displacement.keyword_pain_max);
 });

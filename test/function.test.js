@@ -74,7 +74,7 @@ test("address location is geocoded before searching", async () => {
     if (String(url).includes("maps/api/geocode")) {
       return new Response(JSON.stringify({ status: "OK", results: [{ geometry: { location: { lat: 40, lng: -70 } } }] }), { status: 200 });
     }
-    placesBody = JSON.parse(opts.body);
+    if (opts && opts.body) placesBody = JSON.parse(opts.body);
     return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
   };
   try {
@@ -109,7 +109,7 @@ test("coordinate location skips geocoding", async () => {
   let placesBody = null;
   globalThis.fetch = async (url, opts) => {
     if (String(url).includes("maps/api/geocode")) { geocodeCalled = true; return new Response("{}", { status: 200 }); }
-    placesBody = JSON.parse(opts.body);
+    if (opts && opts.body) placesBody = JSON.parse(opts.body);
     return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
   };
   try {
@@ -138,5 +138,28 @@ test("geocoder REQUEST_DENIED surfaces as 502 with the real reason, not a 400", 
     assert.equal(res.status, 502);
     const d = await res.json();
     assert.match(d.error, /REQUEST_DENIED/);
+  } finally { globalThis.fetch = orig; }
+});
+
+test("live enrichment failure still returns scored leads", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("maps/api/geocode")) {
+      return new Response(JSON.stringify({ status: "OK", results: [{ geometry: { location: { lat: 30, lng: -95 } } }] }), { status: 200 });
+    }
+    if (String(url).includes("places.googleapis.com")) {
+      return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+    }
+    // robots.txt, lead sites, Socrata: simulate down
+    throw new Error("enrichment source down");
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?location=30,-95", { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 200);
+    const d = await res.json();
+    assert.ok(d.leads.length > 0);
+    assert.equal(typeof d.summary.chainsFiltered, "number");
   } finally { globalThis.fetch = orig; }
 });

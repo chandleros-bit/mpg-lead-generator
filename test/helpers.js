@@ -3,7 +3,7 @@ import { business } from "../lib/models.js";
 export const ICP = new Set(["restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"]);
 
 export const WEIGHTS = {
-  displacement: { dissatisfaction_max: 35, keyword_pain_max: 12, tech_max: 20, volume_max: 20, icp_tiebreak: 3 },
+  displacement: { dissatisfaction_max: 35, keyword_pain_max: 12, tech_max: 20, volume_max: 20, processor_max: 25, icp_tiebreak: 3 },
   greenfield: { recency_max: 40, volume_potential_max: 30, setup_gap_max: 27, icp_tiebreak: 3 },
   buckets: { hot: 70, warm: 40 },
   greenfield_review_cutoff: 8,

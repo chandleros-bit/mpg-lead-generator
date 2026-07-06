@@ -101,12 +101,27 @@ Buckets: Hot ≥ 70, Warm 40–69, Cold < 40. Tune all weights in `config.yaml`.
 
 ## Notes / limitations
 
-- SMS and voicemail are **generate-only** — you send them. No automated sending,
-  which keeps you clear of TCPA sending obligations for now.
+- SMS and voicemail are **generate-only** — you send them. No automated sending.
 - Every generated email carries a CAN-SPAM footer (address + opt-out) from config.
-- The review-keyword scan is a heuristic; the why chips let you verify fast.
-- The tool can't see a merchant's actual processor or contract end-date — the
-  score predicts switch-likelihood, not a guaranteed opening.
+- **Processor badge = confirmed incumbent, best-effort.** When a lead's site
+  exposes a known payment SDK/fingerprint (Square, Clover, Toast, Stripe, …) it is
+  a high-confidence Displacement signal shown as a copper "why" chip. False
+  negatives are common (sites that hide the processor, or use one we can't see
+  from the front end); a *missing* badge is not proof of no processor.
+- **TABC greenfield = confirmed new alcohol license.** New bars/restaurants pulled
+  from the Texas open-data TABC feed are genuinely newly licensed; "no processor
+  yet" is still *inferred*. TABC is filtered by county, so results may fall
+  slightly outside your exact search radius.
+- **Owner enrichment = best-effort.** Names/emails are scraped from the lead's own
+  About/Team/Contact pages and may be missing or wrong; they are surfaced for you
+  to contact manually — still generate-only.
+- Scraping honors robots.txt, sends an identifying User-Agent, and only fetches a
+  couple of shallow pages per site. Any source that is disabled, down, or slow is
+  skipped — the lead still scores on Places data alone.
+- Yelp review scanning is **not** integrated: there is no ToS-compliant way to get
+  full review text (the Fusion API returns only short excerpts).
+- The tool can't see a merchant's actual processor contract end-date — the score
+  predicts switch-likelihood, not a guaranteed opening.
 - **Not legal advice.** Confirm you may lawfully contact a business before outreach.
 
 ## Layout

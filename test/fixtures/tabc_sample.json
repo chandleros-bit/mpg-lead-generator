@@ -1,0 +1,22 @@
+[
+  {
+    "license_number": "MB123456",
+    "trade_name": "Bayou Craft Taproom",
+    "license_type": "Mixed Beverage Permit",
+    "location_address": "1200 Barker Cypress Rd",
+    "location_city": "Cypress",
+    "location_zip": "77433",
+    "location_phone": "2815550142",
+    "license_issue_date": "2026-06-15"
+  },
+  {
+    "license_number": "BQ998877",
+    "trade_name": "Katy Corner Cafe",
+    "license_type": "Wine and Beer Retailer",
+    "location_address": "455 Grand Pkwy",
+    "location_city": "Katy",
+    "location_zip": "77494",
+    "license_issue_date": "2026-06-20"
+  },
+  { "license_number": "NONAME", "license_type": "Mixed Beverage Permit" }
+]

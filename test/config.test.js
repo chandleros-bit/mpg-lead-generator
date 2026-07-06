@@ -19,8 +19,8 @@ test("loadConfig returns null secrets when env is unset", () => {
   assert.equal(cfg.passphrase, null);
 });
 
-test("cfgDict exposes only search/personal/weights", () => {
+test("cfgDict exposes search/personal/weights/enrichment", () => {
   const cfg = loadConfig();
   const d = cfgDict(cfg);
-  assert.deepEqual(Object.keys(d).sort(), ["personal", "search", "weights"]);
+  assert.deepEqual(Object.keys(d).sort(), ["enrichment", "personal", "search", "weights"]);
 });

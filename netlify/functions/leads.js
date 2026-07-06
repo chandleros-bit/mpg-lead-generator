@@ -2,6 +2,7 @@ import { loadConfig, cfgDict } from "../../lib/config.js";
 import { fetchAllVerticals, loadDemoBusinesses } from "../../lib/fetcher.js";
 import { geocodeAddress, looksLikeCoords } from "../../lib/geocode.js";
 import { buildLeads, summarize } from "../../lib/pipeline.js";
+import { fetchTabcNew } from "../../lib/tabc.js";
 
 // Netlify Functions v2: route /api/leads directly to this function.
 export const config = { path: "/api/leads" };
@@ -27,6 +28,8 @@ function milesToMeters(milesParam, fallbackMeters) {
 
 export default async function handler(req) {
   const cfg = loadConfig();
+  const requestStart = Date.now();
+  const deadline = requestStart + (cfg.enrichment?.global_budget_ms ?? 6000);
   const url = new URL(req.url);
   const demo = url.searchParams.get("demo") === "1";
 
@@ -69,12 +72,22 @@ export default async function handler(req) {
         verticals: s.verticals,
         maxResults: s.batch_size ?? 20,
       });
+
+      const t = cfg.sources?.tabc;
+      if (t?.enabled) {
+        const tabc = await fetchTabcNew({
+          counties: t.counties, sinceDays: t.since_days,
+          appToken: process.env[t.app_token_env] || null, fetchImpl: fetch,
+        });
+        businesses = businesses.concat(tabc);
+      }
     }
   } catch (e) {
     return json({ error: `Fetch failed: ${e.message}` }, 502);
   }
 
-  const { rows, chainsFiltered } = buildLeads(cfgDict(cfg), businesses);
+  const deps = demo ? {} : { fetchImpl: fetch, deadline };
+  const { rows, chainsFiltered } = await buildLeads(cfgDict(cfg), businesses, deps);
   return json({
     leads: rows,
     summary: { ...summarize(rows), chainsFiltered },
