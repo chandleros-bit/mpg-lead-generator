@@ -13,6 +13,7 @@ The test of success: the call list can be triaged by "call these first, they're 
 ## Scope
 
 **In scope:**
+- Deletion of the Python implementation (Phase 0 — see Decisions).
 - `business_status` filtering in `lib/pipeline.js`.
 - Card-present vs. online-only processor signature split in `lib/processors.js`.
 - Graduated dissatisfaction curve, tri-state website certainty, and confidence-tier computation in `lib/scoring.js`.
@@ -23,7 +24,6 @@ The test of success: the call list can be triaged by "call these first, they're 
 **Out of scope:**
 - New data sources (TX Secretary of State filings, Yelp, live domain probes).
 - Airtable/CRM sync, lead status, statement-audit calculator.
-- The Python path (`src/mpg_leads/scoring.py`) — see "Python mirror" below.
 - Re-tuning bucket thresholds (`hot: 70`, `warm: 40`).
 
 ## Constraints & Non-negotiables
@@ -134,7 +134,7 @@ Scoring (`processorPoints`):
 | `ambiguous` | `processor_ambiguous_max` (10, new config key) | "Square detected — channel unknown" | No |
 | `online_checkout` | 0 | "Stripe on site (online checkout — not our lane)" | No |
 
-Square lands in `ambiguous` deliberately: it is both the most common small-merchant card-present processor *and* a common online checkout, and the fingerprint cannot distinguish them. Awarding it full displacement points would rebuild the exact false confidence being removed; awarding zero would discard a genuinely useful lead. Ten points and an honest chip is the truthful middle.
+Square lands in `ambiguous` deliberately (confirmed 2026-07-14): it is both the most common small-merchant card-present processor *and* a common online checkout, and the fingerprint cannot distinguish them. Awarding it full displacement points would rebuild the exact false confidence being removed; awarding zero would discard a genuinely useful lead. Ten points and an honest chip is the truthful middle.
 
 Effect on the verified example: the 4.8★/300-review Stripe-only restaurant drops **43 → 18, Warm → Cold**, which is correct — it is a healthy business whose register we know nothing about.
 
@@ -150,7 +150,9 @@ function volumeConfidence(reviewCount) {
 }
 ```
 
-Applied as `pyRound(frac * wmax * volumeConfidence(reviewCount))`, preserving `pyRound` (banker's rounding) for Python parity.
+Applied as `pyRound(frac * wmax * volumeConfidence(reviewCount))`.
+
+**A note on `pyRound` after Phase 0.** `pyRound` exists solely to match Python's banker's rounding — its comment in `lib/scoring.js` says so outright, and once the Python path is deleted there is no longer anything to be consistent *with*. Keep it anyway, and keep using it in every new calculation here. It is now the incumbent rounding behavior, and swapping to `Math.round` would silently shift scores on exact `.5` boundaries for no benefit whatsoever. Phase 0 should update the *comment* to say it is preserved deliberately, not delete the function. Test case 12 below changes meaning accordingly: it guards incumbent behavior, not cross-language parity.
 
 The `rating > 4.2` early return and the `Math.max(rating, 3.0)` floor stay as-is.
 
@@ -233,6 +235,7 @@ Ordered by leverage-to-risk. Each phase is independently shippable and leaves te
 
 | Phase | Change | Files | Risk |
 | :---- | :---- | :---- | :---- |
+| **0** | Delete the Python implementation | see inventory below | Low, but do it **first** — every later phase is half the work once there is one engine. |
 | **1** | `business_status` filter | `lib/pipeline.js` | Trivial. Removes a live embarrassment risk. Ship alone. |
 | **2** | Config drift fix (`processor_max` into `public/config.json`) | `public/config.json` | Trivial. Unblocks Phase 3. |
 | **3** | Processor tier split | `lib/processors.js`, `lib/scoring.js`, config | Medium — changes scores on existing leads. |
@@ -241,6 +244,24 @@ Ordered by leverage-to-risk. Each phase is independently shippable and leaves te
 | **6** | Confidence + `source` + signal count | `lib/scoring.js`, `lib/pipeline.js`, `public/dashboard.js`, `public/csv.js` | Low — mostly additive. |
 
 Phases 3–5 move scores. Before merging Phase 3, capture a baseline: run the current engine over `public/demo_places.json`, save the scored output, and diff after each phase so every bucket change is one you intended.
+
+### Phase 0 — deletion inventory
+
+Delete outright (~733 lines of Python plus the Flask app's own templates and static assets):
+
+| Path | What it is |
+| :---- | :---- |
+| `run.py` | Flask launcher — the live-lead footgun |
+| `src/mpg_leads/` | `app.py`, `pipeline.py`, `scoring.py`, `campaigns.py`, `fetcher.py`, `config.py`, `models.py`, `__init__.py`, plus `templates/` and `static/` (a second, stale copy of `dashboard.css` / `dashboard.js` / `demo_places.json`) |
+| `tests/`, `pytest.ini` | pytest suite covering only the deleted code |
+| `requirements.txt` | Flask/requests deps, nothing else uses them |
+| `config.example.yaml` | YAML config for the Flask path only; the JS path uses `config.json` |
+
+`src/mpg_leads/static/` deserves a specific note: it is a **stale duplicate** of `public/dashboard.js` and `public/dashboard.css`. Phase 6 edits the `public/` copies. Leaving the duplicates behind would guarantee that a future reader edits the wrong dashboard.
+
+**README rewrite is the real work, not the deletion.** The README currently leads with `python run.py --demo` as the quick start and frames the JS path as a secondary "This repo also ships as a Netlify app" port of the Python modules. That framing inverts: `npx netlify dev` becomes the quick start, and the "JavaScript port of the Python modules" language (line ~41) has to go — after Phase 0 there is nothing to be a port of. Also drop the `pytest -v` instructions (~line 86) and the `run.py` / `app.py` / `tests/` entries from the project-structure block (~lines 133–147).
+
+No CI to update (`.github/workflows/` does not exist) and `netlify.toml` never referenced Python, so nothing in the build path changes. Verification is `npm test` staying at 126 passing plus `npx netlify dev` still serving `/?demo=1`.
 
 ## Test plan
 
@@ -259,13 +280,18 @@ Cases that must pass:
 9. Two review-derived signals (bad rating + fee keywords, no TABC, no card-present hit) yield **Medium**, never High — the independence rule.
 10. Card-present hit + fee keywords yields **High**.
 11. A lead with zero signals and a Hot score (proxies only) yields **Low** — confidence never reads off the score.
-12. `pyRound` parity holds on `.5` boundaries through the new multiplier.
+12. `pyRound` still rounds half-to-even on `.5` boundaries through the new multiplier — guarding incumbent scores, not Python parity (see Fix 3).
 
-## Open decisions
+## Decisions
 
-1. **Square's tier.** Specced as `ambiguous`/10 points. If your Houston-area experience is that a Square fingerprint on an SMB site nearly always means a Square register, promote it to `card_present` and this gets simpler. Your call — it's a field-knowledge question, not a code question.
-2. **Confirming website absence.** No route exists in current data (Correction 3). Specced as review-text keywords only. A real fix needs a new source. Worth a spike, not a blocker.
-3. **Python mirror.** `src/mpg_leads/scoring.py` will drift further behind after this. The earlier roadmap review already flagged retiring it. Recommend **retire to demo-only** and note it in the README rather than porting six changes twice — but say so before Phase 3, because that's where the paths diverge irreconcilably.
+**Resolved 2026-07-14 (Chandler):**
+
+1. **Square is `ambiguous`.** Confirmed as specced — 10 points, "channel unknown" chip, does not count as a corroborating signal. The fingerprint genuinely cannot distinguish a Square register from Square online checkout, and Square is common enough in both channels that guessing either way would reintroduce the false confidence this spec removes.
+2. **The Python implementation is deleted, not demoted.** Full removal (Phase 0). Demo-only-in-README was the original recommendation here and was rejected for a good reason: it is a documentation fix for a code problem. `run.py` reads `GOOGLE_PLACES_API_KEY` and would still happily produce a real, materially worse lead list — no chain filtering, no processor detection, no TABC, no owner enrichment, no passphrase gate. A README note does not stop that; deleting the code does. Git history preserves it if it is ever wanted back.
+
+**Still open (neither blocks implementation):**
+
+3. **Confirming website absence.** No route exists in current data (Correction 3). Specced as review-text keywords only. A real fix needs a new source. Worth a spike.
 4. **Bucket thresholds.** Phases 3–5 move scores down on average (the artifact points are being removed). `hot: 70` / `warm: 40` may want re-tuning once you see the baseline diff. Deliberately out of scope here — retune on evidence, after.
 
 ## What this does not fix
