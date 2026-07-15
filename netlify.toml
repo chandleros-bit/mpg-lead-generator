@@ -1,4 +1,11 @@
 [build]
+  # There is no build step: public/ is static and the function is bundled by
+  # esbuild. This must be stated explicitly, not omitted — when netlify.toml
+  # leaves the command unset, Netlify falls back to the UI setting, and the UI
+  # framework-detected "hugo" because root config.json is also Hugo's config
+  # filename. That guess made every production build exit 2. Same false positive
+  # the [dev] block below pins down.
+  command = ""
   publish = "public"
 
 # Pin the dev server to plain static serving. Without this, `netlify dev`
