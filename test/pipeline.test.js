@@ -140,7 +140,7 @@ test("buildLeads attaches a processor when detection is enabled", async () => {
   const { rows } = await buildLeads(cfg, [b], { fetchImpl, deadline: Infinity });
   const row = rows.find((r) => r.name === "Joes Cafe");
   assert.deepEqual(row.processor, ["Square"]);
-  assert.ok(row.why.some((w) => w.includes("Square detected on site")));
+  assert.ok(row.why.some((w) => w.includes("Square detected — channel unknown")));
 });
 
 test("buildLeads still scores when the scraping source is down (graceful)", async () => {

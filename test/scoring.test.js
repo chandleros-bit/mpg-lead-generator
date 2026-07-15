@@ -88,10 +88,68 @@ test("score clamps to 100", () => {
   assert.ok(scoreBusiness(b, WEIGHTS, ICP).score <= 100);
 });
 
-test("processorPoints awards full weight only when a processor was detected", () => {
-  assert.equal(processorPoints(["Square"], 25), 25);
-  assert.equal(processorPoints([], 25), 0);
-  assert.equal(processorPoints(undefined, 25), 0);
+test("processorPoints pays by acceptance channel, not by mere detection", () => {
+  // Card-present is the only tier that's evidence about the register we sell to.
+  assert.equal(processorPoints(["Clover"], 25, 10), 25);
+  assert.equal(processorPoints(["Toast"], 25, 10), 25);
+  // Square could be either channel — partial credit, not full.
+  assert.equal(processorPoints(["Square"], 25, 10), 10);
+  // Online-only tells us nothing about the terminal. No points.
+  assert.equal(processorPoints(["Stripe"], 25, 10), 0);
+  assert.equal(processorPoints(["PayPal"], 25, 10), 0);
+  assert.equal(processorPoints(["Shopify Payments"], 25, 10), 0);
+  assert.equal(processorPoints([], 25, 10), 0);
+  assert.equal(processorPoints(undefined, 25, 10), 0);
+});
+
+test("processorPoints takes the strongest tier when a site shows several", () => {
+  // A restaurant running Clover at the register and Stripe for online gift cards
+  // is still a card-present displacement target.
+  assert.equal(processorPoints(["Stripe", "Clover"], 25, 10), 25);
+  assert.equal(processorPoints(["Stripe", "Square"], 25, 10), 10);
+  assert.equal(processorPoints(["PayPal", "Shopify Payments"], 25, 10), 0);
+});
+
+test("a healthy restaurant with online-only Stripe is not a displacement lead", () => {
+  // The regression this phase exists for: 4.8 stars on 300 reviews, Stripe for
+  // online orders only. Scored 43/warm on the strength of a fingerprint that
+  // says nothing about the register.
+  const b = makeBusiness({
+    category: "restaurant", rating: 4.8, review_count: 300,
+    website: "https://x.com", price_level: 2, processor: ["Stripe"],
+  });
+  const lead = scoreBusiness(b, WEIGHTS, ICP);
+  assert.equal(lead.score, 18);
+  assert.equal(lead.bucket, "cold");
+  assert.ok(
+    lead.why.some((w) => w.includes("online checkout")),
+    `chip should say the hit is online-only, got ${JSON.stringify(lead.why)}`,
+  );
+});
+
+test("the same restaurant running Clover keeps full displacement weight", () => {
+  const b = makeBusiness({
+    category: "restaurant", rating: 4.8, review_count: 300,
+    website: "https://x.com", price_level: 2, processor: ["Clover"],
+  });
+  const lead = scoreBusiness(b, WEIGHTS, ICP);
+  assert.equal(lead.score, 43);
+  assert.ok(lead.why.some((w) => w.includes("card-present")));
+});
+
+test("processor chips name the channel honestly", () => {
+  const chip = (processor) =>
+    scoreBusiness(makeBusiness({ category: "cafe", review_count: 50, website: "https://x.com", processor }), WEIGHTS, ICP)
+      .why.find((w) => w.toLowerCase().includes(processor[0].toLowerCase()));
+  assert.match(chip(["Clover"]), /card-present/);
+  assert.match(chip(["Square"]), /channel unknown/);
+  assert.match(chip(["Stripe"]), /online checkout/);
+});
+
+test("legacy processorPoints arity still zeroes with no ambiguous weight", () => {
+  // Ambiguous max is optional; without it Square earns nothing rather than throwing.
+  assert.equal(processorPoints(["Square"], 25), 0);
+  assert.equal(processorPoints(["Clover"], 25), 25);
 });
 
 test("a detected processor raises the displacement score and adds a why-chip", () => {
@@ -100,10 +158,12 @@ test("a detected processor raises the displacement score and adds a why-chip", (
   const a = scoreBusiness(base, WEIGHTS, ICP);
   const b = scoreBusiness(withProc, WEIGHTS, ICP);
   assert.ok(b.score > a.score);
-  assert.ok(b.why.some((w) => w.includes("Square detected on site")));
+  assert.ok(b.why.some((w) => w.includes("Square detected — channel unknown")));
 });
 
-test("processor signal outweighs the keyword-pain signal", () => {
-  // processor_max (25) must exceed keyword_pain_max (12)
+test("a card-present processor outweighs the keyword-pain signal", () => {
+  // A confirmed register beats review chatter: processor_max (25) > keyword_pain_max (12).
   assert.ok(WEIGHTS.displacement.processor_max > WEIGHTS.displacement.keyword_pain_max);
+  // But an ambiguous hit must NOT outrank real review evidence — it's a guess.
+  assert.ok(WEIGHTS.displacement.processor_ambiguous_max < WEIGHTS.displacement.keyword_pain_max);
 });

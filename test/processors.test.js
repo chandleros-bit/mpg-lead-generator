@@ -1,9 +1,43 @@
 // test/processors.test.js
 import test from "node:test";
 import assert from "node:assert/strict";
-import { detectProcessors, discoverCheckoutUrl, detectSiteProcessors } from "../lib/processors.js";
+import {
+  detectProcessors, discoverCheckoutUrl, detectSiteProcessors,
+  tierOf, PROCESSOR_SIGNATURES, CARD_PRESENT, AMBIGUOUS, ONLINE_CHECKOUT,
+} from "../lib/processors.js";
 
 function resp(text, ok = true) { return { ok, text: async () => text }; }
+
+// ---------- acceptance-channel tiers ----------
+
+test("every known signature has exactly one tier", () => {
+  const names = Object.keys(PROCESSOR_SIGNATURES);
+  assert.equal(names.length, 8, "8 known processors");
+  for (const n of names) {
+    const inGroups = [CARD_PRESENT, AMBIGUOUS, ONLINE_CHECKOUT].filter((g) => n in g);
+    assert.equal(inGroups.length, 1, `${n} must belong to exactly one tier group`);
+  }
+});
+
+test("tierOf classifies each known processor", () => {
+  // Card-present: in-store POS. Real evidence about the register we're competing for.
+  assert.equal(tierOf("Clover"), "card_present");
+  assert.equal(tierOf("Toast"), "card_present");
+  assert.equal(tierOf("Aloha"), "card_present");
+  assert.equal(tierOf("Clearent"), "card_present");
+  // Square sells both channels and the fingerprint can't tell them apart.
+  assert.equal(tierOf("Square"), "ambiguous");
+  // Online checkout: says nothing about the terminal at the register.
+  assert.equal(tierOf("Stripe"), "online_checkout");
+  assert.equal(tierOf("PayPal"), "online_checkout");
+  assert.equal(tierOf("Shopify Payments"), "online_checkout");
+});
+
+test("tierOf fails safe on an unknown processor", () => {
+  // A new signature added without a tier must not silently earn card-present
+  // points. No points for evidence we don't have.
+  assert.equal(tierOf("Some New Gateway"), "online_checkout");
+});
 
 test("detectProcessors finds Square by SDK domain", () => {
   assert.deepEqual(detectProcessors('<script src="https://web.squarecdn.com/v1/square.js"></script>'), ["Square"]);
