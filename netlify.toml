@@ -1,6 +1,15 @@
 [build]
   publish = "public"
 
+# Pin the dev server to plain static serving. Without this, `netlify dev`
+# framework-detects and sees root config.json — which is also Hugo's config
+# filename — then tries to launch a Hugo server that doesn't exist and dies.
+# There is no framework here: public/ is static and the logic is in the function.
+[dev]
+  framework = "#static"
+  publish = "public"
+  port = 8888
+
 [build.environment]
   NODE_VERSION = "20"
 
