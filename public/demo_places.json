@@ -2,7 +2,9 @@
   "places": [
     {
       "id": "DEMO_A",
-      "displayName": {"text": "Cut & Co Barber Lounge"},
+      "displayName": {
+        "text": "Cut & Co Barber Lounge"
+      },
       "primaryType": "barber_shop",
       "formattedAddress": "12455 Barker Cypress Rd, Cypress, TX 77429",
       "nationalPhoneNumber": "(281) 555-0142",
@@ -12,13 +14,23 @@
       "priceLevel": "PRICE_LEVEL_MODERATE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Good cut but they are cash only and added a surcharge when I wanted to use my card."}},
-        {"text": {"text": "Card reader was down again, had to run to an ATM."}}
+        {
+          "text": {
+            "text": "Good cut but they are cash only and added a surcharge when I wanted to use my card."
+          }
+        },
+        {
+          "text": {
+            "text": "Card reader was down again, had to run to an ATM."
+          }
+        }
       ]
     },
     {
       "id": "DEMO_B",
-      "displayName": {"text": "Nueva Cocina Taqueria"},
+      "displayName": {
+        "text": "Nueva Cocina Taqueria"
+      },
       "primaryType": "mexican_restaurant",
       "formattedAddress": "9820 Fry Rd, Cypress, TX 77433",
       "nationalPhoneNumber": "(832) 555-0199",
@@ -31,7 +43,9 @@
     },
     {
       "id": "DEMO_C",
-      "displayName": {"text": "Bayou City Nail Bar"},
+      "displayName": {
+        "text": "Bayou City Nail Bar"
+      },
       "primaryType": "nail_salon",
       "formattedAddress": "17390 Spring Cypress Rd, Cypress, TX 77429",
       "nationalPhoneNumber": "(281) 555-0170",
@@ -41,13 +55,23 @@
       "priceLevel": "PRICE_LEVEL_MODERATE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Nice work but there is a card minimum and they charge a convenience fee."}},
-        {"text": {"text": "Relaxing visit, staff was friendly."}}
+        {
+          "text": {
+            "text": "Nice work but there is a card minimum and they charge a convenience fee."
+          }
+        },
+        {
+          "text": {
+            "text": "Relaxing visit, staff was friendly."
+          }
+        }
       ]
     },
     {
       "id": "DEMO_D",
-      "displayName": {"text": "Lone Star Coffee Roasters"},
+      "displayName": {
+        "text": "Lone Star Coffee Roasters"
+      },
       "primaryType": "coffee_shop",
       "formattedAddress": "14031 Grant Rd, Cypress, TX 77429",
       "nationalPhoneNumber": "(281) 555-0155",
@@ -57,44 +81,70 @@
       "priceLevel": "PRICE_LEVEL_MODERATE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Best latte in Cypress, always busy."}},
-        {"text": {"text": "Great spot to work, fast wifi."}}
+        {
+          "text": {
+            "text": "Best latte in Cypress, always busy."
+          }
+        },
+        {
+          "text": {
+            "text": "Great spot to work, fast wifi."
+          }
+        }
       ]
     },
     {
       "id": "DEMO_E",
-      "displayName": {"text": "Grand Opening Boba & Tea"},
+      "displayName": {
+        "text": "Grand Opening Boba & Tea"
+      },
       "primaryType": "cafe",
       "formattedAddress": "25701 Northwest Fwy, Cypress, TX 77429",
       "nationalPhoneNumber": "(832) 555-0111",
       "websiteUri": null,
-      "rating": 5.0,
+      "rating": 5,
       "userRatingCount": 1,
       "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Just opened this week, excited for a new boba spot nearby!"}}
+        {
+          "text": {
+            "text": "Just opened this week, excited for a new boba spot nearby!"
+          }
+        }
       ]
     },
     {
       "id": "DEMO_F",
-      "displayName": {"text": "Precision Auto Care"},
+      "displayName": {
+        "text": "Precision Auto Care"
+      },
       "primaryType": "car_repair",
       "formattedAddress": "11150 Huffmeister Rd, Houston, TX 77065",
       "nationalPhoneNumber": "(713) 555-0188",
       "websiteUri": null,
-      "rating": 4.0,
+      "rating": 4,
       "userRatingCount": 63,
       "priceLevel": "PRICE_LEVEL_MODERATE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Honest shop. Heads up, they only take cash or check, no cards."}},
-        {"text": {"text": "Fixed my brakes fast, fair price."}}
+        {
+          "text": {
+            "text": "Honest shop. Heads up, they only take cash or check, no cards."
+          }
+        },
+        {
+          "text": {
+            "text": "Fixed my brakes fast, fair price."
+          }
+        }
       ]
     },
     {
       "id": "DEMO_G",
-      "displayName": {"text": "Willow & Oak Boutique"},
+      "displayName": {
+        "text": "Willow & Oak Boutique"
+      },
       "primaryType": "clothing_store",
       "formattedAddress": "8323 Fry Rd, Cypress, TX 77433",
       "nationalPhoneNumber": "(281) 555-0133",
@@ -104,13 +154,23 @@
       "priceLevel": "PRICE_LEVEL_EXPENSIVE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Beautiful selection, love this shop."}},
-        {"text": {"text": "A little pricey but great quality."}}
+        {
+          "text": {
+            "text": "Beautiful selection, love this shop."
+          }
+        },
+        {
+          "text": {
+            "text": "A little pricey but great quality."
+          }
+        }
       ]
     },
     {
       "id": "DEMO_H",
-      "displayName": {"text": "Fresh Start Juicery"},
+      "displayName": {
+        "text": "Fresh Start Juicery"
+      },
       "primaryType": "restaurant",
       "formattedAddress": "16718 House Hahl Rd, Cypress, TX 77433",
       "nationalPhoneNumber": "(832) 555-0166",
@@ -120,12 +180,18 @@
       "priceLevel": "PRICE_LEVEL_MODERATE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "New juice place, friendly owner just getting started."}}
+        {
+          "text": {
+            "text": "New juice place, friendly owner just getting started."
+          }
+        }
       ]
     },
     {
       "id": "DEMO_I",
-      "displayName": {"text": "Cypress Discount Vapes"},
+      "displayName": {
+        "text": "Cypress Discount Vapes"
+      },
       "primaryType": "laundromat",
       "formattedAddress": "10920 Fry Rd, Cypress, TX 77433",
       "nationalPhoneNumber": "(281) 555-0122",
@@ -135,12 +201,18 @@
       "priceLevel": "PRICE_LEVEL_INEXPENSIVE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Cash only, no cards accepted."}}
+        {
+          "text": {
+            "text": "Cash only, no cards accepted."
+          }
+        }
       ]
     },
     {
       "id": "DEMO_J",
-      "displayName": {"text": "Terrazza Wood-Fired Pizza"},
+      "displayName": {
+        "text": "Terrazza Wood-Fired Pizza"
+      },
       "primaryType": "pizza_restaurant",
       "formattedAddress": "13230 Telge Rd, Cypress, TX 77429",
       "nationalPhoneNumber": "(281) 555-0177",
@@ -150,8 +222,58 @@
       "priceLevel": "PRICE_LEVEL_EXPENSIVE",
       "businessStatus": "OPERATIONAL",
       "reviews": [
-        {"text": {"text": "Great pizza but the card machine is always down and it is frustrating."}},
-        {"text": {"text": "They add a surcharge for credit cards now."}}
+        {
+          "text": {
+            "text": "Great pizza but the card machine is always down and it is frustrating."
+          }
+        },
+        {
+          "text": {
+            "text": "They add a surcharge for credit cards now."
+          }
+        }
+      ]
+    },
+    {
+      "id": "DEMO_K",
+      "displayName": {
+        "text": "Old Post Cantina"
+      },
+      "primaryType": "mexican_restaurant",
+      "formattedAddress": "8901 Fry Rd, Cypress, TX 77433",
+      "nationalPhoneNumber": "(281) 555-0199",
+      "websiteUri": null,
+      "rating": 2.5,
+      "userRatingCount": 204,
+      "priceLevel": "PRICE_LEVEL_EXPENSIVE",
+      "businessStatus": "CLOSED_PERMANENTLY",
+      "reviews": [
+        {
+          "text": {
+            "text": "They added a surcharge on every card and the terminal was always down."
+          }
+        }
+      ]
+    },
+    {
+      "id": "DEMO_L",
+      "displayName": {
+        "text": "Harvest Table Kitchen"
+      },
+      "primaryType": "restaurant",
+      "formattedAddress": "450 Telge Rd, Cypress, TX 77429",
+      "nationalPhoneNumber": "(281) 555-0177",
+      "websiteUri": null,
+      "rating": 3.3,
+      "userRatingCount": 64,
+      "priceLevel": "PRICE_LEVEL_MODERATE",
+      "businessStatus": "CLOSED_TEMPORARILY",
+      "reviews": [
+        {
+          "text": {
+            "text": "Great food but cash only while their card reader is being replaced."
+          }
+        }
       ]
     }
   ]

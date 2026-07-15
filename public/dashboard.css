@@ -179,6 +179,12 @@ body {
   border-radius: 6px; padding: 3px 8px; color: #4A4E55;
 }
 .why-chip.signal { background: rgba(177,90,40,.08); border-color: rgba(177,90,40,.25); color: #8A431E; }
+/* Warnings must out-rank opportunity signals: a lead can look great on four
+   copper chips and still not be open today. */
+.why-chip.warn {
+  background: rgba(210,63,38,.10); border-color: rgba(210,63,38,.35); color: #A3301D;
+  font-weight: 600;
+}
 
 /* right column: track + action */
 .lead-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }

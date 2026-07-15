@@ -83,9 +83,15 @@ import { leadsToCsv } from "./csv.js";
            r.indexOf("detected on site") >= 0;
   }
 
+  function isWarning(reason) {
+    return reason.toLowerCase().indexOf("temporarily closed") >= 0;
+  }
+
   function whyChips(why) {
     return why.map(function (w) {
-      var cls = isSignal(w) ? "why-chip signal" : "why-chip";
+      var cls = "why-chip";
+      if (isWarning(w)) cls += " warn";
+      else if (isSignal(w)) cls += " signal";
       return '<span class="' + cls + '">' + esc(w) + "</span>";
     }).join("");
   }
@@ -267,11 +273,17 @@ import { leadsToCsv } from "./csv.js";
         setModeBadge(res.d.demo);
         paintStats(res.d.summary);
         var cf = (res.d.summary && res.d.summary.chainsFiltered) || 0;
+        var clf = (res.d.summary && res.d.summary.closedFiltered) || 0;
         if (state.verticals.length) {
           setContext(state.verticals, el.milesInput.value);
+          var ctx = document.getElementById("context");
           if (cf > 0) {
-            document.getElementById("context").innerHTML +=
+            ctx.innerHTML +=
               " · <strong>" + cf + "</strong> chain" + (cf === 1 ? "" : "s") + " filtered";
+          }
+          if (clf > 0) {
+            ctx.innerHTML +=
+              " · <strong>" + clf + "</strong> closed dropped";
           }
         }
         render();
