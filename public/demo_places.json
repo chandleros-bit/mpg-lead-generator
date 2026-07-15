@@ -275,6 +275,26 @@
           }
         }
       ]
+    },
+    {
+      "id": "DEMO_M",
+      "displayName": {
+        "text": "Willow Lane Nail Studio"
+      },
+      "primaryType": "nail_salon",
+      "formattedAddress": "2130 Spring Cypress Rd, Cypress, TX 77429",
+      "nationalPhoneNumber": "(281) 555-0163",
+      "websiteUri": null,
+      "rating": 3,
+      "userRatingCount": 15,
+      "businessStatus": "OPERATIONAL",
+      "reviews": [
+        {
+          "text": {
+            "text": "Nice techs but the wait was long and they seemed disorganized at the front."
+          }
+        }
+      ]
     }
   ]
 }

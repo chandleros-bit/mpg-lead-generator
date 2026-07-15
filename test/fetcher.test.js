@@ -11,7 +11,7 @@ const DEMO_RAW = require("../public/demo_places.json");
 
 test("parse and normalize demo response", () => {
   const businesses = parsePlacesResponse(DEMO_RAW);
-  assert.equal(businesses.length, 12);
+  assert.equal(businesses.length, 13);
   const barber = businesses.find((b) => b.place_id === "DEMO_A");
   assert.equal(barber.category, "salon"); // barber_shop → salon
   assert.equal(barber.price_level, PRICE_LEVELS.PRICE_LEVEL_MODERATE);
@@ -31,7 +31,7 @@ test("dedupe removes seen ids", () => {
 
 test("loadDemoBusinesses returns parsed businesses", () => {
   const businesses = loadDemoBusinesses();
-  assert.equal(businesses.length, 12);
+  assert.equal(businesses.length, 13);
 });
 
 test("fetchNearby posts to Places and parses response (stubbed fetch)", async () => {
@@ -49,7 +49,7 @@ test("fetchNearby posts to Places and parses response (stubbed fetch)", async ()
     });
     // Every place in the stubbed response is parsed; maxResults caps the API
     // request, not the parse, so this tracks the fixture size.
-    assert.equal(businesses.length, 12);
+    assert.equal(businesses.length, 13);
     assert.equal(sawUrl, "https://places.googleapis.com/v1/places:searchNearby");
     assert.equal(sawHeaders["X-Goog-Api-Key"], "k");
   } finally {
