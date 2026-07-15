@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   classifyTrack, dissatisfactionPoints, keywordPainPoints, techPoints,
   volumePoints, recencyPoints, volumePotentialPoints, setupGapPoints, scoreBusiness,
+  websiteStatus,
 } from "../lib/scoring.js";
 import { ICP, WEIGHTS, makeBusiness } from "./helpers.js";
 import { processorPoints } from "../lib/scoring.js";
@@ -81,10 +82,60 @@ test("keyword pain caps and reports", () => {
   assert.deepEqual(new Set(hits), new Set(["fees", "friction"]));
   assert.deepEqual(keywordPainPoints(["great food"], 12), [0, []]);
 });
-test("tech points", () => {
-  assert.equal(techPoints(null, [], 20), 18);
-  assert.equal(techPoints(null, ["cash only here"], 20), 20);
+test("tech points pay by website certainty", () => {
+  // A null websiteUri is Places not telling us, not proof of no website. It's a
+  // proxy with a known false-negative rate, so it earns a capped 8 of 20 rather
+  // than the old 18.
+  assert.equal(techPoints(null, [], 20), 8);
+  // Corroborated by the reviews → this is now evidence, and earns full marks.
+  assert.equal(techPoints(null, ["cash only here"], 20), 20); // 18 + 2, capped at wmax
+  assert.equal(techPoints(null, ["call to order, no website"], 20), 18);
+  // Has a site → nothing, as before.
   assert.equal(techPoints("http://s.com", [], 20), 0);
+  // A site plus a cash-only mention still gets the cash-only nudge only.
+  assert.equal(techPoints("http://s.com", ["cash only"], 20), 2);
+});
+
+test("setup gap pays by website certainty", () => {
+  assert.equal(setupGapPoints(null, [], 27), 14);                    // unknown → half
+  assert.equal(setupGapPoints(null, ["cash only"], 27), 27);         // confirmed → full
+  assert.equal(setupGapPoints("http://x.com", [], 27), 8);           // present → unchanged
+});
+
+test("websiteStatus is tri-state, not a boolean", () => {
+  assert.equal(websiteStatus("http://x.com", []), "present");
+  assert.equal(websiteStatus("http://x.com", ["cash only"]), "present"); // a real site wins
+  assert.equal(websiteStatus(null, []), "unknown");
+  assert.equal(websiteStatus(null, ["great tacos"]), "unknown");
+  assert.equal(websiteStatus(null, ["they are cash only"]), "absent_confirmed");
+  assert.equal(websiteStatus(null, ["call to order"]), "absent_confirmed");
+});
+
+test("a TABC row's null website is an artifact, not a signal", () => {
+  // lib/tabc.js hardcodes website: null because the dataset has no website
+  // column. Under the old rule every TABC lead collected the full 27-point
+  // setup gap for a field nothing ever populated.
+  const tabc = makeBusiness({
+    category: "bar", review_count: 0, website: null, source: "tabc",
+    business_status: "OPERATIONAL", licensed_on: "2026-07-01", review_texts: [],
+  });
+  const lead = scoreBusiness(tabc, WEIGHTS, ICP);
+  assert.equal(lead.track, "greenfield");
+  assert.equal(lead.score, 78, "was 91 — the 13 lost points were pure artifact");
+  assert.equal(lead.bucket, "hot", "still Hot on signals it actually earned");
+});
+
+test("website chips distinguish unconfirmed from confirmed", () => {
+  const chipFor = (b) => scoreBusiness(b, WEIGHTS, ICP).why.find((w) => w.includes("website"));
+  // Displacement, no corroboration → must read as unconfirmed.
+  const unconfirmed = chipFor(makeBusiness({ category: "salon", rating: 3.5, review_count: 100, website: null }));
+  assert.match(unconfirmed, /unconfirmed/);
+  // Displacement, corroborated → reads as real evidence.
+  const confirmed = chipFor(makeBusiness({ category: "salon", rating: 3.5, review_count: 100, website: null, review_texts: ["cash only"] }));
+  assert.doesNotMatch(confirmed, /unconfirmed/);
+  // Greenfield, no corroboration → same honesty.
+  const gf = chipFor(makeBusiness({ category: "bar", review_count: 2, website: null }));
+  assert.match(gf, /unconfirmed/);
 });
 test("volume points", () => {
   assert.equal(volumePoints(4, 200, 20), 20);
@@ -99,10 +150,6 @@ test("recency", () => {
 });
 test("volume potential", () => {
   assert.ok(volumePotentialPoints("restaurant", 4, 30) > volumePotentialPoints("professional", 0, 30));
-});
-test("setup gap", () => {
-  assert.equal(setupGapPoints(null, 27), 27);
-  assert.equal(setupGapPoints("http://x.com", 27), 8);
 });
 
 // ---------- assembly ----------
@@ -126,14 +173,27 @@ test("fresh taqueria is hot greenfield", () => {
   assert.ok(lead.score >= 70);
   assert.equal(lead.bucket, "hot");
 });
-test("a bad salon in the old dead zone now surfaces", () => {
-  // The regression this phase exists for: 3.0 stars on 15 reviews scored 24/cold
-  // purely because dissatisfaction was gated at 20 reviews — the worst-rated
-  // business in the demo set ranked below a 3.9.
+test("the 8-19 dead zone is gone: a thin bad rating now earns points", () => {
+  // Isolates the dissatisfaction change by giving the lead a real website, so
+  // the website-certainty rules contribute nothing either way. 3.0 stars on 15
+  // reviews used to earn a structural zero from the heaviest weight.
+  const thin = makeBusiness({ category: "salon", rating: 3.0, review_count: 15, website: "https://s.com" });
+  const solid = makeBusiness({ category: "salon", rating: 3.0, review_count: 200, website: "https://s.com" });
+  assert.equal(scoreBusiness(thin, WEIGHTS, ICP).score, 24);   // 18 dissatisfaction + 3 vol + 3 tiebreak
+  assert.equal(scoreBusiness(solid, WEIGHTS, ICP).score, 50);  // 35 + 12 vol + 3, unchanged by this phase
+  assert.ok(scoreBusiness(thin, WEIGHTS, ICP).score > 6, "scored 6 before the graduated curve");
+});
+
+test("a thin rating plus an unlisted website is Cold, and should be", () => {
+  // The two phases pull opposite ways on the same lead, and the honest answer is
+  // low. 3.0 stars on 15 reviews now earns half dissatisfaction (18, was 0), but
+  // its null websiteUri now earns 8 rather than 18 because Places simply didn't
+  // say. Net 32 — up from 24, still Cold. One thin review-derived signal and one
+  // proxy is not a lead worth calling first.
   const b = makeBusiness({ category: "salon", rating: 3.0, review_count: 15, website: null });
   const lead = scoreBusiness(b, WEIGHTS, ICP);
-  assert.equal(lead.score, 42);
-  assert.equal(lead.bucket, "warm");
+  assert.equal(lead.score, 32);
+  assert.equal(lead.bucket, "cold");
 });
 
 test("a scoring rating always shows a chip that says how thin it is", () => {
