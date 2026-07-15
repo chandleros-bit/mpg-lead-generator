@@ -79,8 +79,14 @@ import { leadsToCsv } from "./csv.js";
   // Copper = real evidence worth dialing on. A card-present POS qualifies; an
   // online-checkout or channel-unknown hit does not, so it stays a plain chip
   // rather than dressing a Stripe tag up as displacement proof.
+  //
+  // Anything the engine marked unconfirmed is a proxy and never earns copper —
+  // "no website listed (unconfirmed)" must not look like "no website —
+  // confirmed by reviews", or the styling re-invents the certainty the score
+  // just gave up.
   function isSignal(reason) {
     var r = reason.toLowerCase();
+    if (r.indexOf("unconfirmed") >= 0) return false;
     return r.indexOf("complaint") >= 0 || r.indexOf("no website") >= 0 ||
            r.indexOf("surcharge") >= 0 || r.indexOf("cash only") >= 0 ||
            r.indexOf("card-present") >= 0;

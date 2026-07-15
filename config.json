@@ -28,6 +28,7 @@
   "weights": {
     "displacement": {"dissatisfaction_max": 35, "keyword_pain_max": 12, "tech_max": 20, "volume_max": 20, "processor_max": 25, "processor_ambiguous_max": 10, "icp_tiebreak": 3},
     "greenfield": {"recency_max": 40, "volume_potential_max": 30, "setup_gap_max": 27, "icp_tiebreak": 3},
+    "website_unknown": {"tech_points": 8, "setup_gap_factor": 0.5},
     "volume_confidence": {"full_at": 20, "half_at": 10},
     "buckets": {"hot": 70, "warm": 40},
     "greenfield_review_cutoff": 8
