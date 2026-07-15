@@ -87,10 +87,10 @@ export default async function handler(req) {
   }
 
   const deps = demo ? {} : { fetchImpl: fetch, deadline };
-  const { rows, chainsFiltered } = await buildLeads(cfgDict(cfg), businesses, deps);
+  const { rows, chainsFiltered, closedFiltered } = await buildLeads(cfgDict(cfg), businesses, deps);
   return json({
     leads: rows,
-    summary: { ...summarize(rows), chainsFiltered },
+    summary: { ...summarize(rows), chainsFiltered, closedFiltered },
     demo,
     threshold: cfg.search.score_threshold ?? 40,
   });

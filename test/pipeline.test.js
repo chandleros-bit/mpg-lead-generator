@@ -33,6 +33,77 @@ test("buildLeads drops businesses whose name matches a brand, and counts them", 
   assert.ok(rows.length > 0);
 });
 
+// ---------- business_status filtering ----------
+
+test("buildLeads drops CLOSED_PERMANENTLY and counts it", async () => {
+  // Without the filter this lead scores 74/hot on old bad reviews and tops the list.
+  const b = business({
+    place_id: "c1", name: "Ghost Kitchen", category: "restaurant", address: "1 Main St",
+    rating: 2.5, review_count: 200, price_level: 3, business_status: "CLOSED_PERMANENTLY",
+  });
+  const { rows, closedFiltered } = await buildLeads(CFG, [b]);
+  assert.equal(closedFiltered, 1);
+  assert.equal(rows.length, 0);
+});
+
+test("buildLeads returns closedFiltered 0 when nothing is closed", async () => {
+  const b = business({
+    place_id: "o1", name: "Open Co", category: "cafe", address: "9 Main St",
+    rating: 4.0, review_count: 30, business_status: "OPERATIONAL",
+  });
+  const { closedFiltered } = await buildLeads(CFG, [b]);
+  assert.equal(closedFiltered, 0);
+});
+
+test("the demo fixture exercises the closed filter", async () => {
+  // DEMO_K is CLOSED_PERMANENTLY (dropped); DEMO_L is CLOSED_TEMPORARILY (kept).
+  const { rows, closedFiltered } = await buildLeads(CFG, parsePlacesResponse(DEMO_RAW));
+  assert.equal(closedFiltered, 1);
+  assert.ok(rows.every((r) => r.name !== "Old Post Cantina"), "permanently closed is dropped");
+  const temp = rows.find((r) => r.name === "Harvest Table Kitchen");
+  assert.ok(temp, "temporarily closed survives");
+  assert.ok(temp.why.some((w) => w.toLowerCase().includes("temporarily closed")));
+});
+
+test("buildLeads keeps CLOSED_TEMPORARILY and flags it", async () => {
+  const b = business({
+    place_id: "c2", name: "Back Soon Cafe", category: "cafe", address: "2 Main St",
+    rating: 3.2, review_count: 60, business_status: "CLOSED_TEMPORARILY",
+  });
+  const { rows, closedFiltered } = await buildLeads(CFG, [b]);
+  assert.equal(closedFiltered, 0, "temporarily closed is not dropped");
+  assert.equal(rows.length, 1);
+  assert.ok(
+    rows[0].why.some((w) => w.toLowerCase().includes("temporarily closed")),
+    `expected a temporarily-closed chip, got ${JSON.stringify(rows[0].why)}`,
+  );
+});
+
+test("buildLeads treats missing/empty business_status as operational", async () => {
+  const b = business({
+    place_id: "c3", name: "No Status Co", category: "salon", address: "3 Main St",
+    rating: 3.5, review_count: 40, business_status: "",
+  });
+  const { rows, closedFiltered } = await buildLeads(CFG, [b]);
+  assert.equal(closedFiltered, 0);
+  assert.equal(rows.length, 1);
+});
+
+test("a closed business never reaches the processor scrape", async () => {
+  // Closed leads must be dropped before enrichment so they can't burn fetch budget.
+  let fetched = 0;
+  const fetchImpl = async () => { fetched++; return respHtml("<html>clover.com</html>"); };
+  const closed = business({
+    place_id: "c4", name: "Dead Diner", category: "restaurant", address: "4 Main St",
+    rating: 2.0, review_count: 300, website: "https://dead.example",
+    business_status: "CLOSED_PERMANENTLY",
+  });
+  const cfg = { ...CFG, enrichment: { processor_detection: { enabled: true, max_sites: 5 }, owner: { enabled: false } } };
+  const { rows } = await buildLeads(cfg, [closed], { fetchImpl });
+  assert.equal(rows.length, 0);
+  assert.equal(fetched, 0, "closed lead should not be scraped");
+});
+
 test("summarize counts add up", async () => {
   const { rows } = await buildLeads(CFG, parsePlacesResponse(DEMO_RAW));
   const s = summarize(rows);
