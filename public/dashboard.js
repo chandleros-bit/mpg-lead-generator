@@ -76,11 +76,14 @@ import { leadsToCsv } from "./csv.js";
       .replace(/"/g, "&quot;");
   }
 
+  // Copper = real evidence worth dialing on. A card-present POS qualifies; an
+  // online-checkout or channel-unknown hit does not, so it stays a plain chip
+  // rather than dressing a Stripe tag up as displacement proof.
   function isSignal(reason) {
     var r = reason.toLowerCase();
     return r.indexOf("complaint") >= 0 || r.indexOf("no website") >= 0 ||
            r.indexOf("surcharge") >= 0 || r.indexOf("cash only") >= 0 ||
-           r.indexOf("detected on site") >= 0;
+           r.indexOf("card-present") >= 0;
   }
 
   function whyChips(why) {
