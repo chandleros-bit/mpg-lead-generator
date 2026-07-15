@@ -301,3 +301,108 @@ test("a card-present processor outweighs the keyword-pain signal", () => {
   // But an ambiguous hit must NOT outrank real review evidence — it's a guess.
   assert.ok(WEIGHTS.displacement.processor_ambiguous_max < WEIGHTS.displacement.keyword_pain_max);
 });
+
+// ---------- confidence tiers ----------
+
+import { collectSignals, computeConfidence, SIGNAL_ORIGIN } from "../lib/scoring.js";
+
+test("signals are grouped by origin, and most are review-derived", () => {
+  assert.equal(SIGNAL_ORIGIN.confirmed_source, "public_record");
+  assert.equal(SIGNAL_ORIGIN.card_present_processor, "site_fingerprint");
+  assert.equal(SIGNAL_ORIGIN.rating_dissatisfaction, "review_corpus");
+  assert.equal(SIGNAL_ORIGIN.keyword_pain, "review_corpus");
+  assert.equal(SIGNAL_ORIGIN.website_absent_confirmed, "review_corpus");
+});
+
+test("collectSignals fires only on real evidence", () => {
+  const sig = (o) => collectSignals(makeBusiness(o), WEIGHTS);
+  assert.deepEqual(sig({ category: "bar", source: "tabc", review_count: 0 }), ["confirmed_source"]);
+  assert.deepEqual(sig({ rating: 3.5, review_count: 100, website: "https://x.com" }), ["rating_dissatisfaction"]);
+  assert.deepEqual(sig({ processor: ["Clover"], website: "https://x.com", review_count: 50, rating: 4.9 }), ["card_present_processor"]);
+  assert.deepEqual(sig({ review_texts: ["they add a surcharge"], website: "https://x.com", review_count: 50, rating: 4.9 }), ["keyword_pain"]);
+});
+
+test("proxies are never signals", () => {
+  const sig = (o) => collectSignals(makeBusiness(o), WEIGHTS);
+  // A null website is Places not saying — the whole point of Phase 5.
+  assert.deepEqual(sig({ website: null, review_count: 50, rating: 4.9 }), []);
+  // Review count alone, price level alone: not evidence of anything.
+  assert.deepEqual(sig({ review_count: 500, rating: 4.9, price_level: 4, website: "https://x.com" }), []);
+  // Ambiguous and online-only processor hits are not evidence about the register.
+  assert.deepEqual(sig({ processor: ["Square"], website: "https://x.com", review_count: 50, rating: 4.9 }), []);
+  assert.deepEqual(sig({ processor: ["Stripe"], website: "https://x.com", review_count: 50, rating: 4.9 }), []);
+});
+
+test("a thin rating scores but does not count as a signal", () => {
+  // Phase 4 pays half weight at 10–19 reviews. Half weight is enough to move the
+  // score, not enough to corroborate anything.
+  const thin = collectSignals(makeBusiness({ rating: 3.0, review_count: 15, website: "https://x.com" }), WEIGHTS);
+  assert.deepEqual(thin, []);
+  const solid = collectSignals(makeBusiness({ rating: 3.0, review_count: 20, website: "https://x.com" }), WEIGHTS);
+  assert.deepEqual(solid, ["rating_dissatisfaction"]);
+});
+
+test("High requires corroboration from outside the review corpus", () => {
+  // Rating and keyword pain both come from the same ~5-review Google sample. If
+  // that sample is unrepresentative they are wrong together, so two of them
+  // agreeing is one source speaking twice — Medium, never High.
+  assert.equal(computeConfidence(["rating_dissatisfaction", "keyword_pain"]), "medium");
+  assert.equal(computeConfidence(["rating_dissatisfaction", "keyword_pain", "website_absent_confirmed"]), "medium");
+  // A card-present fingerprint is independent of the reviews → High.
+  assert.equal(computeConfidence(["card_present_processor", "keyword_pain"]), "high");
+  // A TABC licence is independent of both → High.
+  assert.equal(computeConfidence(["confirmed_source", "rating_dissatisfaction"]), "high");
+});
+
+test("one signal is Medium, no matter how strong", () => {
+  assert.equal(computeConfidence(["confirmed_source"]), "medium");
+  assert.equal(computeConfidence(["card_present_processor"]), "medium");
+  assert.equal(computeConfidence(["rating_dissatisfaction"]), "medium");
+});
+
+test("no signals is Low", () => {
+  assert.equal(computeConfidence([]), "low");
+});
+
+test("confidence never reads off the score", () => {
+  // A Hot score built entirely from proxies is exactly the case this exists to
+  // catch: a Places greenfield with no reviews and an unlisted website.
+  const lead = scoreBusiness(makeBusiness({ category: "bar", review_count: 0, website: null, price_level: 3 }), WEIGHTS, ICP);
+  assert.equal(lead.bucket, "hot");
+  assert.deepEqual(lead.signals, []);
+  assert.equal(lead.confidence, "low", "Hot on proxies alone must still read Low");
+});
+
+test("a temporarily closed lead keeps the confidence its evidence earns", () => {
+  // Confidence answers "how much should I believe this", not "should I dial
+  // today" — the warn chip already answers that.
+  const b = makeBusiness({
+    category: "bar", source: "tabc", review_count: 0, business_status: "CLOSED_TEMPORARILY",
+    processor: ["Clover"], website: "https://x.com",
+  });
+  const lead = scoreBusiness(b, WEIGHTS, ICP);
+  assert.deepEqual(lead.signals.sort(), ["card_present_processor", "confirmed_source"]);
+  assert.equal(lead.confidence, "high");
+  assert.ok(lead.why.some((w) => w.includes("temporarily closed")));
+});
+
+test("TABC greenfield is confirmed-new; Places greenfield is only inferred", () => {
+  const tabc = scoreBusiness(makeBusiness({
+    category: "bar", source: "tabc", review_count: 0, licensed_on: "2026-07-01",
+  }), WEIGHTS, ICP);
+  assert.ok(tabc.why.some((w) => w.includes("confirmed new — TABC license issued 2026-07-01")),
+    `got ${JSON.stringify(tabc.why)}`);
+  assert.equal(tabc.confidence, "medium", "one strong signal is still one signal");
+
+  const places = scoreBusiness(makeBusiness({ category: "bar", review_count: 2 }), WEIGHTS, ICP);
+  assert.ok(places.why.some((w) => w.includes("inferred, not confirmed")), `got ${JSON.stringify(places.why)}`);
+  assert.equal(places.confidence, "low");
+});
+
+test("a TABC bar and a Places bar are no longer indistinguishable", () => {
+  // The review's point #6: both scored 91/hot with byte-identical why arrays.
+  const tabc = scoreBusiness(makeBusiness({ category: "bar", source: "tabc", review_count: 0, licensed_on: "2026-07-01" }), WEIGHTS, ICP);
+  const places = scoreBusiness(makeBusiness({ category: "bar", source: "places", review_count: 0 }), WEIGHTS, ICP);
+  assert.notDeepEqual(tabc.why, places.why);
+  assert.notEqual(tabc.confidence, places.confidence);
+});

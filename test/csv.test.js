@@ -5,7 +5,7 @@ import { leadsToCsv } from "../public/csv.js";
 
 const HEADER =
   "Name,Category,Address,Phone,Website,Rating,Review Count,Score,Track,Bucket," +
-  "Signals,Processors,Owner Name,Owner Email,Source";
+  "Signals,Processors,Owner Name,Owner Email,Confidence,Evidence Count,Source";
 
 function row(over = {}) {
   return {
@@ -14,7 +14,8 @@ function row(over = {}) {
     review_count: 210, score: 72, track: "displacement", bucket: "hot",
     why: ["Displacement • Restaurant", "Square detected on site"],
     processor: ["Square"], owner: { name: "Jane Smith", email: "jane@joestacos.com" },
-    source: "places", ...over,
+    source: "places", confidence: "high", signals: ["card_present_processor", "keyword_pain"],
+    ...over,
   };
 }
 
@@ -26,13 +27,13 @@ test("empty rows produce a header-only document", () => {
   assert.equal(leadsToCsv([]), HEADER);
 });
 
-test("a lead serializes to 15 labeled columns in order", () => {
+test("a lead serializes to 17 labeled columns in order", () => {
   const cells = leadsToCsv([row({ why: ["a", "b"], processor: ["Square", "Toast"] })])
     .split("\r\n")[1].split(",");
   assert.deepEqual(cells, [
     "Joe's Tacos", "restaurant", "123 Main St", "7135550100", "https://joestacos.com",
     "3.8", "210", "72", "displacement", "hot", "a; b", "Square; Toast",
-    "Jane Smith", "jane@joestacos.com", "places",
+    "Jane Smith", "jane@joestacos.com", "high", "2", "places",
   ]);
 });
 
@@ -50,11 +51,19 @@ test("fields with commas, quotes, or newlines are quoted and escaped", () => {
 test("empty arrays and null owner produce empty cells", () => {
   const cells = leadsToCsv([row({ why: [], processor: [], owner: null })])
     .split("\r\n")[1].split(",");
-  assert.equal(cells[10], ""); // Signals
+  assert.equal(cells[10], ""); // Signals (the why chips)
   assert.equal(cells[11], ""); // Processors
   assert.equal(cells[12], ""); // Owner Name
   assert.equal(cells[13], ""); // Owner Email
-  assert.equal(cells[14], "places"); // Source
+  assert.equal(cells[14], "high"); // Confidence
+  assert.equal(cells[15], "2"); // Evidence Count
+  assert.equal(cells[16], "places"); // Source
+});
+
+test("a lead with no evidence exports Low and a zero count", () => {
+  const cells = leadsToCsv([row({ confidence: "low", signals: [] })]).split("\r\n")[1].split(",");
+  assert.equal(cells[14], "low");
+  assert.equal(cells[15], "0");
 });
 
 test("null/undefined rating serializes to an empty cell", () => {

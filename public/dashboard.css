@@ -163,6 +163,27 @@ body {
   text-transform: uppercase; letter-spacing: .12em; color: var(--muted);
   margin-top: 7px;
 }
+/* The confidence axis. Deliberately not colour-coded to the score: a Hot lead
+   can read Low here, and that contrast is the whole point of the readout. */
+.conf {
+  font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  margin-top: 8px; padding: 3px 7px; border-radius: 5px;
+  border: 1px solid transparent; display: inline-block;
+}
+.conf-high { background: rgba(15,138,95,.12); color: var(--approve); border-color: rgba(15,138,95,.3); }
+.conf-medium { background: rgba(192,138,46,.12); color: var(--warm); border-color: rgba(192,138,46,.3); }
+.conf-low { background: var(--paper); color: var(--muted); border-color: var(--line); }
+.conf-count {
+  font-family: "JetBrains Mono", monospace; font-size: 9px;
+  color: var(--muted); margin-top: 4px; letter-spacing: .04em;
+}
+.source-tag {
+  font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; white-space: nowrap;
+  padding: 4px 8px; border-radius: 6px;
+  background: rgba(15,138,95,.12); color: var(--approve);
+}
 
 /* body of card */
 .lead-body { min-width: 0; }

@@ -22,6 +22,10 @@ const COLUMNS = [
   ["Processors", (r) => (r.processor || []).join("; ")],
   ["Owner Name", (r) => (r.owner && r.owner.name) || ""],
   ["Owner Email", (r) => (r.owner && r.owner.email) || ""],
+  // "Signals" above is the human-readable why chips. These two are the
+  // confidence axis: how many independent signals fired, and the resulting tier.
+  ["Confidence", (r) => r.confidence],
+  ["Evidence Count", (r) => (r.signals || []).length],
   ["Source", (r) => r.source],
 ];
 
