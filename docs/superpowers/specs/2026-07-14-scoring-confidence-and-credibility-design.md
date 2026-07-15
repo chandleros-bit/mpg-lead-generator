@@ -116,15 +116,21 @@ export const CARD_PRESENT = {          // in-store POS — real displacement evi
 };
 export const AMBIGUOUS = {             // sells both channels — can't tell from a fingerprint
   Square: ["squareup.com", "web.squarecdn.com", "square-marketplace"],
-  "Shopify Payments": ["cdn.shopify.com", "shopify.com/payments", "shop_pay"],
 };
 export const ONLINE_CHECKOUT = {       // tells us nothing about the register
   Stripe: ["js.stripe.com", "stripe.com/v3", "checkout.stripe.com"],
   PayPal: ["paypal.com/sdk", "paypalobjects.com"],
+  "Shopify Payments": ["cdn.shopify.com", "shopify.com/payments", "shop_pay"],
 };
 ```
 
-`detectProcessors` returns `[{ name, tier }]` instead of `[name]`. `PROCESSOR_SIGNATURES` is kept as a merged export so `discoverCheckoutUrl` and existing tests keep working.
+`PROCESSOR_SIGNATURES` is kept as a merged export so `discoverCheckoutUrl` and existing tests keep working.
+
+**Corrected 2026-07-15 (during Phase 3):** this spec originally put Shopify Payments in `AMBIGUOUS` and had `detectProcessors` return `[{ name, tier }]`. Both were wrong.
+
+Shopify Payments belongs in `ONLINE_CHECKOUT`, where the source review had it. The reasoning that makes Square ambiguous does not transfer: `cdn.shopify.com` fires on every Shopify storefront and only proves the merchant sells online, whereas `squareup.com` plausibly belongs to a business whose register is Square. Shopify POS is invisible from the front end.
+
+`detectProcessors` keeps returning `[name]`. Tier is a pure lookup from name, so storing it on every row duplicates the table — and `b.processor` flows into `public/csv.js` via `.join("; ")`, which would have serialized `[object Object]` into the CSV export's Processors column. `tierOf(name)` derives it at the two call sites that care.
 
 Scoring (`processorPoints`):
 
