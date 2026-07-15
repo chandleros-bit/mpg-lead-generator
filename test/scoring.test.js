@@ -28,9 +28,52 @@ test("dissatisfaction scales", () => {
   assert.equal(dissatisfactionPoints(3.6, 100, 35), 18);
   assert.equal(dissatisfactionPoints(2.5, 100, 35), 35);
 });
-test("dissatisfaction needs volume", () => {
-  assert.equal(dissatisfactionPoints(3.0, 19, 35), 0);
+test("dissatisfaction needs a rating at all", () => {
   assert.equal(dissatisfactionPoints(null, 100, 35), 0);
+  assert.equal(dissatisfactionPoints(undefined, 100, 35), 0);
+});
+
+// ---------- graduated volume confidence ----------
+
+test("dissatisfaction is graduated, not a cliff at 20 reviews", () => {
+  // Full weight from 20 up.
+  assert.equal(dissatisfactionPoints(3.0, 20, 35), 35);
+  assert.equal(dissatisfactionPoints(3.0, 200, 35), 35);
+  // Half weight across the old dead zone (10–19) instead of a structural zero.
+  assert.equal(dissatisfactionPoints(3.0, 15, 35), 18);
+  assert.equal(dissatisfactionPoints(3.0, 10, 35), 18);
+  assert.equal(dissatisfactionPoints(3.0, 19, 35), 18);
+  // Below 10 a rating is one bad night — still zero, deliberately.
+  assert.equal(dissatisfactionPoints(3.0, 9, 35), 0);
+  assert.equal(dissatisfactionPoints(3.0, 0, 35), 0);
+});
+
+test("the >4.2 gate still wins over volume", () => {
+  // A happy business is not a displacement lead no matter how many reviews.
+  assert.equal(dissatisfactionPoints(4.3, 100, 35), 0);
+  assert.equal(dissatisfactionPoints(4.8, 15, 35), 0);
+});
+
+test("graduated weight scales with rating, not just volume", () => {
+  // 3.6 is halfway between 4.2 and 3.0 → half of 35 is ~18, halved again ~9.
+  assert.equal(dissatisfactionPoints(3.6, 100, 35), 18);
+  assert.equal(dissatisfactionPoints(3.6, 15, 35), 9);
+});
+
+test("volume-confidence thresholds are config-driven", () => {
+  const vc = { full_at: 50, half_at: 25 };
+  assert.equal(dissatisfactionPoints(3.0, 50, 35, vc), 35);
+  assert.equal(dissatisfactionPoints(3.0, 30, 35, vc), 18);
+  assert.equal(dissatisfactionPoints(3.0, 24, 35, vc), 0);
+});
+
+test("pyRound still rounds half-to-even through the new multiplier", () => {
+  // 35 * 1.0 * 0.5 = 17.5 → 18 (17 is odd, so half rounds up to even).
+  assert.equal(dissatisfactionPoints(3.0, 15, 35), 18);
+  // 30 * 1.0 * 0.5 = 15.0 → exact, no rounding involved.
+  assert.equal(dissatisfactionPoints(3.0, 15, 30), 15);
+  // 25 * 1.0 * 0.5 = 12.5 → 12 (12 is even, so half rounds down).
+  assert.equal(dissatisfactionPoints(3.0, 15, 25), 12);
 });
 test("keyword pain caps and reports", () => {
   const [pts, hits] = keywordPainPoints(["they add a surcharge", "card declined twice"], 12);
@@ -83,6 +126,37 @@ test("fresh taqueria is hot greenfield", () => {
   assert.ok(lead.score >= 70);
   assert.equal(lead.bucket, "hot");
 });
+test("a bad salon in the old dead zone now surfaces", () => {
+  // The regression this phase exists for: 3.0 stars on 15 reviews scored 24/cold
+  // purely because dissatisfaction was gated at 20 reviews — the worst-rated
+  // business in the demo set ranked below a 3.9.
+  const b = makeBusiness({ category: "salon", rating: 3.0, review_count: 15, website: null });
+  const lead = scoreBusiness(b, WEIGHTS, ICP);
+  assert.equal(lead.score, 42);
+  assert.equal(lead.bucket, "warm");
+});
+
+test("a scoring rating always shows a chip that says how thin it is", () => {
+  // A lead must never earn dissatisfaction points with no chip explaining why.
+  const thin = scoreBusiness(makeBusiness({ category: "salon", rating: 3.0, review_count: 15 }), WEIGHTS, ICP);
+  const chip = thin.why.find((w) => w.startsWith("rating "));
+  assert.ok(chip, `expected a rating chip, got ${JSON.stringify(thin.why)}`);
+  assert.match(chip, /thin sample/, "a half-weight signal must read as half-confidence");
+
+  const solid = scoreBusiness(makeBusiness({ category: "salon", rating: 3.0, review_count: 200 }), WEIGHTS, ICP);
+  const solidChip = solid.why.find((w) => w.startsWith("rating "));
+  assert.equal(solidChip, "rating 3 on 200 reviews", "full-weight chip stays as it was");
+});
+
+test("a rating that earns nothing shows no rating chip", () => {
+  // Below the half threshold the rating contributes zero, so claiming it as a
+  // reason would be inventing evidence.
+  // 9 reviews still classifies as displacement (greenfield cutoff is 8).
+  const lead = scoreBusiness(makeBusiness({ category: "salon", rating: 3.0, review_count: 9 }), WEIGHTS, ICP);
+  assert.equal(lead.track, "displacement");
+  assert.equal(lead.why.some((w) => w.startsWith("rating ")), false);
+});
+
 test("score clamps to 100", () => {
   const b = makeBusiness({ category: "restaurant", review_count: 0, website: null, price_level: 4 });
   assert.ok(scoreBusiness(b, WEIGHTS, ICP).score <= 100);
