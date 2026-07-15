@@ -170,13 +170,23 @@ import { leadsToCsv } from "./csv.js";
     var site = lead.website ? ' · <a href="' + esc(lead.website) + '" target="_blank" rel="noopener">site</a>' : "";
     var trackCls = lead.track === "greenfield" ? "track-greenfield" : "track-displacement";
 
+    var conf = lead.confidence || "low";
+    var n = (lead.signals || []).length;
+    var confLabel = conf.charAt(0).toUpperCase() + conf.slice(1);
+
     return (
       '<article class="lead-card' + below + '" data-track="' + lead.track +
-        '" data-bucket="' + lead.bucket + '" data-name="' + esc(lead.name.toLowerCase()) + '">' +
+        '" data-bucket="' + lead.bucket + '" data-confidence="' + conf +
+        '" data-source="' + esc(lead.source || "places") +
+        '" data-name="' + esc(lead.name.toLowerCase()) + '">' +
         '<div class="lead-head">' +
           '<div class="readout">' +
             '<div class="score ' + lead.bucket + '">' + lead.score + "</div>" +
             '<div class="score-cap">' + esc(lead.bucket) + "</div>" +
+            // The second axis: how much of that score to believe, and on how
+            // much evidence. A Hot lead can legitimately read Low here.
+            '<div class="conf conf-' + conf + '">' + esc(confLabel) + "</div>" +
+            '<div class="conf-count">' + n + " signal" + (n === 1 ? "" : "s") + "</div>" +
           "</div>" +
           '<div class="lead-body">' +
             '<h3 class="lead-name">' + esc(lead.name) + "</h3>" +
@@ -185,6 +195,9 @@ import { leadsToCsv } from "./csv.js";
           "</div>" +
           '<div class="lead-actions">' +
             '<span class="track-tag ' + trackCls + '">' + esc(lead.track) + "</span>" +
+            // Only TABC gets a tag: it's the one source that's a confirmed
+            // public record rather than an inference off review count.
+            (lead.source === "tabc" ? '<span class="source-tag">TABC confirmed</span>' : "") +
             '<button class="btn-research-open" type="button" aria-expanded="false">Who to ask for</button>' +
             '<button class="btn-copy-open" type="button" aria-expanded="false">Outreach</button>' +
           "</div>" +
