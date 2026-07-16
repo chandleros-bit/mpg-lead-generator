@@ -1,10 +1,14 @@
 import { buildResearchLinks } from "./research.js";
 import { leadsToCsv } from "./csv.js";
+import { sortLeads, BUCKET_ORDER } from "./sort.js";
 
 (function () {
   "use strict";
 
-  var state = { leads: [], filter: "all", sort: "score", query: "", threshold: 40, verticals: [] };
+  // Confidence is the default order: the list's job is "who do I call first",
+  // and score alone can't answer that — a 72/medium and a 71/low are adjacent
+  // numbers and completely different leads.
+  var state = { leads: [], filter: "all", sort: "confidence", query: "", threshold: 40, verticals: [] };
 
   var DEMO = new URLSearchParams(location.search).get("demo") === "1";
   var PASS_KEY = "mpg_pass";
@@ -218,11 +222,7 @@ import { leadsToCsv } from "./csv.js";
     if (state.query) {
       rows = rows.filter(function (r) { return r.name.toLowerCase().indexOf(state.query) >= 0; });
     }
-    rows.sort(function (a, b) {
-      if (state.sort === "name") return a.name.localeCompare(b.name);
-      return b.score - a.score;
-    });
-    return rows;
+    return sortLeads(rows, state.sort);
   }
 
   function render() {
@@ -233,12 +233,28 @@ import { leadsToCsv } from "./csv.js";
         "Clear the filter, or widen your search radius and verticals in config.json.</div>";
       return;
     }
+    var BUCKET_DIVIDER = {
+      hot: "Hot · corroborated first",
+      warm: "Warm · corroborated first",
+      cold: "Cold · corroborated first",
+    };
     var html = "";
     var dividerShown = false;
+    var lastBucket = null;
     for (var i = 0; i < rows.length; i++) {
       if (state.sort === "score" && !dividerShown && rows[i].score < state.threshold) {
         html += '<div class="divider">below target score ' + state.threshold + "</div>";
         dividerShown = true;
+      }
+      // Bucket sections, because confidence orders inside a bucket rather than
+      // across buckets. The score-threshold divider is meaningless in this order:
+      // score isn't monotonic once evidence outranks it within a band.
+      if (state.sort === "confidence") {
+        var bkt = BUCKET_ORDER.indexOf(rows[i].bucket) >= 0 ? rows[i].bucket : "cold";
+        if (bkt !== lastBucket) {
+          html += '<div class="divider divider-' + bkt + '">' + esc(BUCKET_DIVIDER[bkt]) + "</div>";
+          lastBucket = bkt;
+        }
       }
       html += card(rows[i]);
     }

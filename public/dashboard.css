@@ -135,6 +135,13 @@ body {
 .divider::before, .divider::after {
   content: ""; flex: 1; height: 1px; background: var(--line);
 }
+/* Bucket sections when sorting by confidence. Tinted to match the score readout
+   on the cards below, so the section header and the number read as one thing. */
+.divider-hot { color: var(--hot); font-weight: 700; }
+.divider-hot::before, .divider-hot::after { background: rgba(210,63,38,.3); }
+.divider-warm { color: var(--warm); font-weight: 700; }
+.divider-warm::before, .divider-warm::after { background: rgba(192,138,46,.3); }
+.divider-cold { color: var(--muted); }
 
 .lead-card {
   background: var(--card); border: 1px solid var(--line);
