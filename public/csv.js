@@ -27,6 +27,7 @@ const COLUMNS = [
   ["Confidence", (r) => r.confidence],
   ["Evidence Count", (r) => (r.signals || []).length],
   ["Source", (r) => r.source],
+  ["Matched Query", (r) => r.matched_query || ""],
 ];
 
 function cell(value) {

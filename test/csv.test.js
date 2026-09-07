@@ -5,7 +5,7 @@ import { leadsToCsv } from "../public/csv.js";
 
 const HEADER =
   "Name,Category,Address,Phone,Website,Rating,Review Count,Score,Track,Bucket," +
-  "Signals,Processors,Owner Name,Owner Email,Confidence,Evidence Count,Source";
+  "Signals,Processors,Owner Name,Owner Email,Confidence,Evidence Count,Source,Matched Query";
 
 function row(over = {}) {
   return {
@@ -27,13 +27,13 @@ test("empty rows produce a header-only document", () => {
   assert.equal(leadsToCsv([]), HEADER);
 });
 
-test("a lead serializes to 17 labeled columns in order", () => {
+test("a lead serializes to 18 labeled columns in order", () => {
   const cells = leadsToCsv([row({ why: ["a", "b"], processor: ["Square", "Toast"] })])
     .split("\r\n")[1].split(",");
   assert.deepEqual(cells, [
     "Joe's Tacos", "restaurant", "123 Main St", "7135550100", "https://joestacos.com",
     "3.8", "210", "72", "displacement", "hot", "a; b", "Square; Toast",
-    "Jane Smith", "jane@joestacos.com", "high", "2", "places",
+    "Jane Smith", "jane@joestacos.com", "high", "2", "places", "",
   ]);
 });
 
@@ -58,6 +58,7 @@ test("empty arrays and null owner produce empty cells", () => {
   assert.equal(cells[14], "high"); // Confidence
   assert.equal(cells[15], "2"); // Evidence Count
   assert.equal(cells[16], "places"); // Source
+  assert.equal(cells[17], ""); // Matched Query — blank unless a specialty search found it
 });
 
 test("a lead with no evidence exports Low and a zero count", () => {

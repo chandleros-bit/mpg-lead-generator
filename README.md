@@ -31,7 +31,8 @@ your key — no key, no passphrase.
 Live mode prompts for the passphrase, then click **Refresh leads** to pull and
 score a fresh batch.
 
-Edit your search area (`location`, `radius_meters`), `verticals`,
+Edit your search area (`location`, `radius_meters`), `verticals` (auto repair
+runs under `auto_repair`),
 `score_threshold`, weights, and your personal / CAN-SPAM details in `config.json`.
 Keep `public/config.json` in sync — the browser reads a few display fields from it.
 Secrets live in env vars, never in the repo.
@@ -87,6 +88,34 @@ Buckets: Hot ≥ 70, Warm 40–69, Cold < 40. Tune all weights in `config.json`.
 
 - SMS and voicemail are **generate-only** — you send them. No automated sending.
 - Every generated email carries a CAN-SPAM footer (address + opt-out) from config.
+- **Auto repair is a first-class vertical** (`auto_repair`), separate from the
+  generic `auto` bucket that still holds car washes and parts stores. It gets a
+  second discovery pass: after the `car_repair` type search, a set of specialty
+  Text Search queries (transmission, European, diesel, collision, brake, tire
+  and lube) pulls the high-ticket independents that a bare type search ranks
+  below the chains. Text Search is not type-constrained, so every result is
+  re-checked against the vertical's own type list before it counts — a "brake
+  shop" query otherwise returns dealerships. Set `textSearch: false` on
+  `fetchAllVerticals` to skip the sweep. See
+  `docs/superpowers/specs/2026-09-07-auto-repair-vertical-design.md`.
+- **Shop-management software outranks a POS fingerprint.** Tekmetric,
+  Shopmonkey, Shop-Ware, AutoLeap, Protractor and Mitchell 1 bundle their own
+  payments, so a shop running one took a rate it never shopped — usually a
+  default to replace rather than a relationship to displace. These score in
+  their own `integrated_software` tier, above `card_present`. The platform name
+  is safe to say in an email because it is a fact about their software; a
+  fingerprinted *processor* is a guess and the copy never names one.
+- **High-ticket proxies are proxies.** Specialty keywords and a posted labor
+  rate read from reviews nudge the ranking (8 points against a 100+ scale) so
+  you know which of two similar shops is worth the drive. They are never quoted
+  to a merchant. The number that goes in front of an owner comes off their
+  statement.
+- **The auto copy holds three rules, and the tests enforce them:** the
+  Visa/Mastercard settlement is described as pending, never as done (preliminary
+  approval June 2026, fairness hearing November 2026, appeals expected); in
+  Texas it is dual pricing and cash discount, never surcharging (§604A.0021 is
+  still on the books and *Rowell* only protects its named plaintiffs); and no
+  savings figure is promised before a statement is read.
 - **Processor badge = confirmed incumbent, best-effort.** When a lead's site
   exposes a known payment SDK/fingerprint (Square, Clover, Toast, Stripe, …) it is
   a high-confidence Displacement signal shown as a copper "why" chip. False
@@ -121,9 +150,9 @@ netlify/functions/
 lib/
   pipeline.js                dedupe, chain filter, enrich, score → display rows
   scoring.js                 two-track scoring engine
-  campaigns.js               track-aware copy generator
-  fetcher.js                 Places API + parsing + dedupe + demo loader
-  processors.js              processor/POS fingerprint detection
+  campaigns.js               track-aware copy generator + per-vertical overrides
+  fetcher.js                 Places Nearby + Text Search, parsing, dedupe, demo loader
+  processors.js              processor/POS + shop-management fingerprint detection
   tabc.js                    TABC new-license greenfield source
   chains.js                  known-chain disqualifier (name + domain)
   enrich.js                  owner/decision-maker scrape

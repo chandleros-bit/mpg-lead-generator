@@ -218,6 +218,11 @@ import { sortLeads, BUCKET_ORDER } from "./sort.js";
       rows = rows.filter(function (r) { return r.bucket === state.filter; });
     } else if (state.filter === "displacement" || state.filter === "greenfield") {
       rows = rows.filter(function (r) { return r.track === state.filter; });
+    } else if (state.filter.indexOf("vertical:") === 0) {
+      // Vertical filter. Rows carry the display form of the category (spaces,
+      // not underscores), so the chip stores that same form.
+      var want = state.filter.slice("vertical:".length);
+      rows = rows.filter(function (r) { return r.category === want; });
     }
     if (state.query) {
       rows = rows.filter(function (r) { return r.name.toLowerCase().indexOf(state.query) >= 0; });

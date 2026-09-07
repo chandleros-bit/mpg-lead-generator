@@ -1,9 +1,9 @@
 import { business } from "../lib/models.js";
 
-export const ICP = new Set(["restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"]);
+export const ICP = new Set(["auto_repair", "restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"]);
 
 export const WEIGHTS = {
-  displacement: { dissatisfaction_max: 35, keyword_pain_max: 12, tech_max: 20, volume_max: 20, processor_max: 25, processor_ambiguous_max: 10, icp_tiebreak: 3 },
+  displacement: { dissatisfaction_max: 35, keyword_pain_max: 12, tech_max: 20, volume_max: 20, processor_max: 25, processor_ambiguous_max: 10, processor_integrated_max: 28, high_ticket_max: 8, icp_tiebreak: 3 },
   greenfield: { recency_max: 40, volume_potential_max: 30, setup_gap_max: 27, icp_tiebreak: 3 },
   website_unknown: { tech_points: 8, setup_gap_factor: 0.5 },
   volume_confidence: { full_at: 20, half_at: 10 },
