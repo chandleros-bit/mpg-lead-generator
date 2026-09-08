@@ -75,7 +75,11 @@ test("address location is geocoded before searching", async () => {
     if (String(url).includes("maps/api/geocode")) {
       return new Response(JSON.stringify({ status: "OK", results: [{ geometry: { location: { lat: 40, lng: -70 } } }] }), { status: 200 });
     }
-    if (opts && opts.body) placesBody = JSON.parse(opts.body);
+    // Capture the Nearby body specifically: the specialty Text Search sweep
+    // posts to searchText afterwards with a locationBias, not a restriction.
+    if (String(url).includes("places:searchNearby") && opts && opts.body) {
+      placesBody = JSON.parse(opts.body);
+    }
     return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
   };
   try {
@@ -110,7 +114,9 @@ test("coordinate location skips geocoding", async () => {
   let placesBody = null;
   globalThis.fetch = async (url, opts) => {
     if (String(url).includes("maps/api/geocode")) { geocodeCalled = true; return new Response("{}", { status: 200 }); }
-    if (opts && opts.body) placesBody = JSON.parse(opts.body);
+    if (String(url).includes("places:searchNearby") && opts && opts.body) {
+      placesBody = JSON.parse(opts.body);
+    }
     return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
   };
   try {

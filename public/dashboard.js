@@ -93,7 +93,7 @@ import { sortLeads, BUCKET_ORDER } from "./sort.js";
     if (r.indexOf("unconfirmed") >= 0) return false;
     return r.indexOf("complaint") >= 0 || r.indexOf("no website") >= 0 ||
            r.indexOf("surcharge") >= 0 || r.indexOf("cash only") >= 0 ||
-           r.indexOf("card-present") >= 0;
+           r.indexOf("dual pricing") >= 0 || r.indexOf("card-present") >= 0;
   }
 
   function isWarning(reason) {
@@ -218,6 +218,11 @@ import { sortLeads, BUCKET_ORDER } from "./sort.js";
       rows = rows.filter(function (r) { return r.bucket === state.filter; });
     } else if (state.filter === "displacement" || state.filter === "greenfield") {
       rows = rows.filter(function (r) { return r.track === state.filter; });
+    } else if (state.filter.indexOf("vertical:") === 0) {
+      // Vertical filter. Rows carry the display form of the category (spaces,
+      // not underscores), so the chip stores that same form.
+      var want = state.filter.slice("vertical:".length);
+      rows = rows.filter(function (r) { return r.category === want; });
     }
     if (state.query) {
       rows = rows.filter(function (r) { return r.name.toLowerCase().indexOf(state.query) >= 0; });

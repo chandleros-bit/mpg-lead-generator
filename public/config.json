@@ -1,7 +1,7 @@
 {
   "search": {
     "radius_meters": 15000,
-    "verticals": ["restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"],
+    "verticals": ["auto_repair", "restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"],
     "score_threshold": 55
   },
   "personal": {
