@@ -1,4 +1,4 @@
-// Pure lead-list ordering. Browser-loaded from public/ (Netlify's publish dir)
+// Pure lead-list ordering. Browser-loaded from public/ (the static output dir)
 // and unit-tested with node --test. No DOM here.
 
 // Best first. Also drives the section dividers in the dashboard.

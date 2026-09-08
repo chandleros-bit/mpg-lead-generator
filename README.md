@@ -4,17 +4,17 @@ A web app that finds Houston-area merchants (Google Places API), scores them on 
 two-track model (Displacement vs. Greenfield), and generates track-aware outreach
 copy — email, SMS, and voicemail — that you copy and send yourself.
 
-Ships as a static dashboard plus one Netlify Function (`netlify/functions/leads.js`).
+Ships as a static dashboard plus one Vercel Function (`api/leads.js`).
 Your Places API key stays server-side in the function and is never exposed to the
 browser.
 
 ## Quick start (demo mode — no API key needed)
 
 ```bash
-npx netlify dev          # serves public/ + the function locally
+npx vercel dev           # serves public/ + the function locally
 ```
 
-Open <http://localhost:8888/?demo=1>. Demo mode loads bundled sample merchants
+Open <http://localhost:3000/?demo=1>. Demo mode loads bundled sample merchants
 (`public/demo_places.json`) so you can see the whole dashboard before wiring up
 your key — no key, no passphrase.
 
@@ -26,7 +26,7 @@ your key — no key, no passphrase.
    GOOGLE_PLACES_API_KEY="your-key-here"
    APP_PASSPHRASE="something-only-you-know"
    ```
-3. Run `npx netlify dev` and open <http://localhost:8888> (no `?demo=1`).
+3. Run `npx vercel dev` and open <http://localhost:3000> (no `?demo=1`).
 
 Live mode prompts for the passphrase, then click **Refresh leads** to pull and
 score a fresh batch.
@@ -38,15 +38,36 @@ Secrets live in env vars, never in the repo.
 
 ## Deploy
 
-1. Push to GitHub and create a Netlify site from the repo (build command: none;
-   publish directory: `public`).
-2. In **Site settings → Environment variables**, set:
+Hosted on Vercel. `master` is the production branch.
+
+1. Push to GitHub and import the repo at <https://vercel.com/new>. Take the
+   settings from `vercel.json` — do not let the dashboard override them.
+2. In **Project Settings → Environment Variables**, set for Production (and
+   Preview, if you want branch deploys to fetch real leads):
    - `GOOGLE_PLACES_API_KEY` — your Places API (New) key.
    - `APP_PASSPHRASE` — the passphrase that unlocks live lead-fetching.
+   - `TABC_APP_TOKEN` — optional; raises the TABC dataset rate limit.
 3. Visit your site. Demo mode is at `/?demo=1`; live mode is the default and
    prompts for the passphrase (stored in your browser after the first entry).
 
-Push to redeploy after editing `config.json`.
+Push to `master` to redeploy after editing `config.json`.
+
+There is deliberately no `dev` npm script. `vercel dev` runs the project's own
+dev command when one exists, so a script of `"dev": "vercel dev"` makes the CLI
+invoke itself and exit 1 on a recursion guard. Call it directly.
+
+### Why `vercel.json` pins things it looks like it should not need
+
+`framework` is pinned to `null` on purpose. This repo has no framework —
+`public/` is static and all the logic is in one function — but root
+`config.json` is *also* Hugo's config filename, so framework auto-detection can
+decide this is a Hugo site and run a build that does not exist. The same false
+positive broke every build on the previous host. `outputDirectory` is stated for
+the same reason: say what this is, rather than letting it be guessed.
+
+`maxDuration` is 60s because a live run fans out across the Places type search,
+one Text Search call per specialty query, the TABC dataset, and the enrichment
+scrape. The default 10s is not enough for a wide radius.
 
 ## Using the dashboard
 
@@ -115,8 +136,8 @@ Buckets: Hot ≥ 70, Warm 40–69, Cold < 40. Tune all weights in `config.json`.
 
 ```
 config.json                  settings: search area, verticals, weights, personal/CAN-SPAM
-netlify.toml                 build + function bundler config
-netlify/functions/
+vercel.json                  static output dir, framework pin, function timeout
+api/
   leads.js                   the one endpoint: fetch → score → campaigns
 lib/
   pipeline.js                dedupe, chain filter, enrich, score → display rows
