@@ -182,6 +182,49 @@ positive assertion that the refusal-to-quote survives. All three were
 mutation-tested — inserting "I will save you $400 a month", adding a figure to
 greenfield, and deleting the refusal each fail the suite.
 
+### 7. Auto repair gets more displacement headroom than other verticals, and that stands
+
+Two of this branch's additions only ever pay auto repair. `integrated_software`
+is worth 28 where `card_present` is 25, and it fires on shop-management
+signatures no restaurant site carries. `high_ticket_max` is 8 and is gated on
+`HIGH_TICKET_KEYWORDS`, which only `auto_repair` has an entry in. So the
+displacement track now allocates 126 points to an auto shop and 115 to
+everything else, against a score clamped at 100 and bucket cuts fixed at 70 hot
+/ 40 warm.
+
+The consequence is real and is being accepted rather than corrected: an auto
+shop clears *hot* on 70 of 126 available points where a salon needs 70 of 115,
+and more auto shops will pile up at exactly 100. Scores are no longer strictly
+comparable across verticals on this track.
+
+Three reasons that is the right trade here:
+
+1. The extra headroom is extra *evidence*, not a thumb on the scale. Both new
+   sources are things we actually observed — a platform on their own site, and
+   language in their own name and reviews. A vertical with more visible signal
+   earning a higher ceiling is the system working.
+2. Confidence does not move with it. `collectSignals` pays no signal for
+   high-ticket points, so a shop riding specialty keywords into a higher score
+   carries exactly the confidence it had without them — an identical auto shop
+   and salon score 39 and 31 and both read `medium` on `["rating_dissatisfaction"]`.
+   A score inflated by proxies is precisely what the confidence axis was added
+   to expose, and it still exposes it.
+3. Ordering already breaks ties on evidence, not on the score alone. Leads sort
+   by bucket, then confidence, then score, so shops stacked at the ceiling are
+   separated by how much of that ceiling is corroborated.
+
+Greenfield is untouched: it allocates 40 + 30 + 27 + 3 = 100 for every vertical,
+and auto repair's specialty keywords pay nothing there — they only add a routing
+chip. The cross-vertical comparison that matters for a new-business list is
+therefore unaffected.
+
+Normalizing each track to a fixed 100 would restore strict comparability and is
+the obvious alternative. It is not worth doing yet: it would reprice every score
+on record for a distortion that only bites when ranking an auto shop directly
+against a salon, which is not how the list is worked. Revisit if a second
+vertical gets its own point sources, at which point the ceilings start diverging
+in more than one direction.
+
 ## Verification
 
 `npm test` — 213 tests, all passing. New coverage in
