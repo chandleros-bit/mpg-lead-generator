@@ -29,6 +29,9 @@ incumbent relationship is weakest, before the first dial.
   processor tier (`lib/processors.js`, `lib/scoring.js`).
 - High-ticket proxies: specialty keywords and posted labor rate
   (`lib/scoring.js`).
+- Review keyword groups split: dual-pricing language out of `FEE_KEYWORDS`
+  into its own group (`lib/scoring.js`, `public/dashboard.js`). Applies to
+  every vertical, not just this one.
 - Auto-repair outreach copy with the settlement hook and dual-pricing framing
   (`lib/campaigns.js`).
 - Auto repair chain exclusions (`config.json`).
@@ -97,9 +100,19 @@ guess; the copy names the platform and never names the processor.
 ### 4. High-ticket proxies nudge the ranking, they never leave the building
 
 Specialty keywords (transmission, diesel, euro, collision, and so on) read the
-shop's name and the reviews Google surfaced. A posted labor rate at or above
-$100/hr is read out of review text — the modal band in the 2025 PartsTech survey
-was $120–$159/hr, so $100 is a conservative floor.
+shop's name and the reviews Google surfaced. They match on whole words plus an
+optional plural, not on substrings: the keyword is printed straight back to the
+rep as a chip, so a hit inside an unrelated word ("Neuro Motors", "a fleeting
+visit") is a wrong claim on the lead card, not just a stray point. Two keywords
+are deliberate prefixes — "euro" has to reach European and the shorthand half
+these shops put in their own name, and "turbo" has to reach turbocharger.
+
+A posted labor rate at or above $100/hr is read out of review text — the modal
+band in the 2025 PartsTech survey was $120–$159/hr, so $100 is a conservative
+floor. It has to be stated as a rate: an amount merely sitting near the word
+"labor" is the labor line off an invoice, and a ceiling of $400/hr rejects
+anything that gets past that, because a bill read as an hourly is a fabricated
+fact rather than a weak signal.
 
 Both are proxies and are weighted as proxies: `high_ticket_max` is 8 against a
 displacement scale that already allocates over 100 points. They exist to decide
@@ -110,7 +123,27 @@ statement.
 They are inert for every vertical that has not opted in: a restaurant called
 Transmission Tacos scores zero from this.
 
-### 5. The copy holds three rules, and the tests enforce them
+### 5. A merchant already posting two prices is not a fee complaint
+
+Review mining previously had two keyword groups, fees and friction, and
+dual-pricing language was folded into fees. That mislabels the best lead on the
+board. A customer writing "they add 3% on cards" is a complaint; a shop posting
+"cash price / card price" is a merchant already doing the thing this pitch
+sells, usually built wrong, and the rep opens on "let me make sure that is set
+up legally" rather than "your fees are high". Same points either way, different
+chip, different call.
+
+`DUAL_PRICING_KEYWORDS` is now its own group ("cash discount", "cash price",
+"card price", "dual pricing", "non-cash adjustment"), chipped as *cash/card
+pricing in reviews — already running dual pricing*. `keyword_pain_max` is 12 and
+each group pays 6, so a third group cannot lift the track's ceiling — it only
+changes which two of the three get paid. Asserted in `test/auto_repair.test.js`.
+
+This is not auto-repair-specific and is deliberately not gated to the vertical:
+a restaurant posting a cash price is the same conversation. It is listed here
+because this branch is where the keyword list was touched.
+
+### 6. The copy holds three rules, and the tests enforce them
 
 This is the part with legal exposure, so it is asserted rather than trusted.
 
@@ -130,17 +163,28 @@ This is the part with legal exposure, so it is asserted rather than trusted.
    price with a disclosed cash discount, and no separate fee line on the card
    receipt — a fee line converts it into a surcharge and walks straight into
    §604A.0021.
-3. **No savings figure before a statement.** Every number in the copy is the
-   merchant's own arithmetic on their own volume, or an offer to go find the
-   number. A single month distorts anyway; a real quote wants two or three.
+3. **No savings figure before a statement.** The line is cost versus saving,
+   not whether a number appears. Displacement carries one illustration — a $700
+   repair order, north of $20 to the networks — and that is a *cost*: what they
+   already hand over, arithmetic anyone can check, framed against a repair order
+   rather than against their volume. What never appears is the other direction:
+   a figure they would get back. The copy says outright that it cannot tell them
+   what they would save until it has read a statement. Greenfield carries no
+   figure at all, because a shop with no volume yet has nothing to compute from
+   and any number there could only be invented. A single month distorts anyway;
+   a real quote wants two or three.
 
-`test/auto_repair.test.js` asserts all three against the generated text for both
-tracks, including a banned-phrase list. If someone later edits the copy into a
-promise, the suite fails.
+`test/auto_repair.test.js` asserts all three against the generated text for
+**both tracks**. Rule 3 is enforced three ways, because a banned-phrase list
+only catches phrasings someone thought of: the phrase list, a sentence-level
+check that no dollar figure ever shares a sentence with a savings word, and a
+positive assertion that the refusal-to-quote survives. All three were
+mutation-tested — inserting "I will save you $400 a month", adding a figure to
+greenfield, and deleting the refusal each fail the suite.
 
 ## Verification
 
-`npm test` — 205 tests, all passing. New coverage in
+`npm test` — 213 tests, all passing. New coverage in
 `test/auto_repair.test.js` spans the vertical split, the Text Search path and
 its off-type rejection, the fingerprint tier ordering and the Shopware false
 positive, the high-ticket proxies, and the three copy rules.

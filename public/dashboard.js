@@ -93,7 +93,7 @@ import { sortLeads, BUCKET_ORDER } from "./sort.js";
     if (r.indexOf("unconfirmed") >= 0) return false;
     return r.indexOf("complaint") >= 0 || r.indexOf("no website") >= 0 ||
            r.indexOf("surcharge") >= 0 || r.indexOf("cash only") >= 0 ||
-           r.indexOf("card-present") >= 0;
+           r.indexOf("dual pricing") >= 0 || r.indexOf("card-present") >= 0;
   }
 
   function isWarning(reason) {

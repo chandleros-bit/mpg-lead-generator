@@ -15,8 +15,8 @@ import {
 } from "../lib/processors.js";
 import {
   processorPoints, processorChip, collectSignals, computeConfidence,
-  specialtyHits, laborRateMentioned, highTicketPoints, painHits,
-  VERTICAL_VOLUME, LABOR_RATE_FLOOR, scoreBusiness,
+  specialtyHits, laborRateMentioned, highTicketPoints, painHits, keywordPainPoints,
+  VERTICAL_VOLUME, LABOR_RATE_FLOOR, LABOR_RATE_CEILING, scoreBusiness,
 } from "../lib/scoring.js";
 import { generateCampaign } from "../lib/campaigns.js";
 import { scoredLead } from "../lib/models.js";
@@ -193,11 +193,53 @@ test("specialty work is picked up from the name and the reviews", () => {
   assert.deepEqual(specialtyHits("salon", "Transmission Hair Co", []), []);
 });
 
+// The chip reads "high-ticket work: euro" straight off this list, so a keyword
+// that fires inside an unrelated word puts a wrong claim on the lead card.
+test("a specialty keyword does not fire inside a longer, unrelated word", () => {
+  assert.deepEqual(specialtyHits("auto_repair", "Neuro Motors", []), []);
+  assert.deepEqual(specialtyHits("auto_repair", "Shop", ["a fleeting visit"]), []);
+  assert.deepEqual(specialtyHits("auto_repair", "Shop", ["the waiting room smelled of germanium"]), []);
+  assert.deepEqual(specialtyHits("auto_repair", "Shop", ["they sell audiobooks in the lobby"]), []);
+});
+
+// Plurals are the same work, and "euro" is deliberately a prefix: it has to
+// subsume "European" and the shorthand half these shops put in their own name.
+test("plurals count, and euro still subsumes european", () => {
+  assert.deepEqual(specialtyHits("auto_repair", "Shop", ["they rebuild transmissions"]), ["transmission", "rebuild"]);
+  assert.deepEqual(specialtyHits("auto_repair", "Houston Collisions", []), ["collision"]);
+  assert.deepEqual(specialtyHits("auto_repair", "EuroTech Automotive", []), ["euro"]);
+  assert.deepEqual(specialtyHits("auto_repair", "European Motors", []), ["euro"]);
+  assert.deepEqual(specialtyHits("auto_repair", "Shop", ["turbocharger rebuild"]), ["rebuild", "turbo"]);
+  assert.deepEqual(specialtyHits("auto_repair", "Body Shops of Cypress", []), ["body shop"]);
+});
+
 test("labor rate reads the highest hourly figure mentioned", () => {
   assert.equal(laborRateMentioned(["they charge $145/hr"]), 145);
   assert.equal(laborRateMentioned(["$120 an hour here", "dealer wanted $210 per hour"]), 210);
   assert.equal(laborRateMentioned(["labor rate is $155 and worth it"]), 155);
+  assert.equal(laborRateMentioned(["their shop rate is $130"]), 130);
+  assert.equal(laborRateMentioned(["hourly rate: $180"]), 180);
   assert.equal(laborRateMentioned(["the part was $40"]), null);
+});
+
+// A total is not a rate. The figure is printed back to the rep as "labor rate
+// around $X/hr", so a bill read as a rate is a fabricated fact on the lead card.
+test("a labor total near the word labor is not a labor rate", () => {
+  assert.equal(laborRateMentioned(["labor and parts came to $850 total"]), null);
+  assert.equal(laborRateMentioned(["the labor bill hit $1200"]), null);
+  assert.equal(laborRateMentioned(["parts $300, labor $250"]), null);
+  assert.equal(laborRateMentioned(["labor was $420 for the job"]), null);
+  assert.equal(laborRateMentioned(["they quoted $600 labor, no breakdown"]), null);
+});
+
+// Nothing bills four figures an hour. A number above the ceiling is a bill, a
+// typo, or a part, whichever regex found it.
+test("an implausible hourly figure is rejected by the ceiling", () => {
+  assert.equal(laborRateMentioned(["they wanted $2400 an hour, insane"]), null);
+  assert.equal(laborRateMentioned(["labor rate is $9999"]), null);
+  // The ceiling never eats a real rate: the top of the market is well under it.
+  assert.equal(laborRateMentioned([`shop rate $${LABOR_RATE_CEILING}`]), LABOR_RATE_CEILING);
+  assert.ok(LABOR_RATE_CEILING > LABOR_RATE_FLOOR);
 });
 
 test("high-ticket points stay a nudge, and stay off for other verticals", () => {
@@ -210,9 +252,40 @@ test("high-ticket points stay a nudge, and stay off for other verticals", () => 
   assert.deepEqual(highTicketPoints("auto_repair", "Euro Diesel", [], 0), [0, { specialties: [], laborRate: null }]);
 });
 
-test("dual-pricing language in reviews counts as fee pain", () => {
-  assert.deepEqual(painHits(["they give you a cash discount if you skip the card"]), ["fees"]);
-  assert.deepEqual(painHits(["the cash price is lower"]), ["fees"]);
+// A merchant already posting a cash price is not a merchant complaining about
+// fees. Both are leads; they are not the same lead, and the rep opens
+// differently on each, so they do not share a label.
+test("dual-pricing language is its own group, not a fee complaint", () => {
+  assert.deepEqual(painHits(["they give you a cash discount if you skip the card"]), ["dual_pricing"]);
+  assert.deepEqual(painHits(["the cash price is lower"]), ["dual_pricing"]);
+  assert.deepEqual(painHits(["they post a non-cash adjustment at the counter"]), ["dual_pricing"]);
+  // A genuine complaint still reads as one.
+  assert.deepEqual(painHits(["they added a surcharge on every card"]), ["fees"]);
+  assert.deepEqual(painHits(["a 3% fee to use card here"]), ["fees"]);
+  // Both can be true at once, and both are reported.
+  assert.deepEqual(
+    painHits(["convenience fee on cards, and the cash price is lower"]),
+    ["fees", "dual_pricing"],
+  );
+  assert.deepEqual(painHits(["great tacos, no complaints"]), []);
+});
+
+test("a shop already running dual pricing is chipped as that, not as complaints", () => {
+  const b = makeBusiness({
+    category: "auto_repair", rating: 3.6, review_count: 90,
+    review_texts: ["they post a cash price and a card price"],
+  });
+  const lead = scoreBusiness(b, WEIGHTS, ICP);
+  assert.ok(lead.why.some((w) => w.includes("dual pricing")), lead.why.join(" | "));
+  assert.ok(!lead.why.some((w) => w.includes("fee complaints")), lead.why.join(" | "));
+});
+
+// keyword_pain_max is 12 and each group pays 6, so a third group cannot inflate
+// the track's ceiling — it only changes which two of the three get paid.
+test("splitting the group out does not raise the keyword pain ceiling", () => {
+  const all = ["surcharge here, cash price posted, card reader was down"];
+  assert.deepEqual(painHits(all), ["fees", "dual_pricing", "friction"]);
+  assert.equal(keywordPainPoints(all, 12)[0], 12);
 });
 
 test("a specialty shop scores above an identical general shop", () => {
@@ -278,12 +351,58 @@ test("RULE 2 — Texas: dual pricing and cash discount, never the word surcharge
   }
 });
 
+// Sentence-level, because the rule is about what a number is attached to, not
+// about whether a number appears. A cost illustration and a savings promise can
+// use the same digits.
+function sentences(text) {
+  return text.split(/(?<=[.!?])\s+/);
+}
+
+const SAVINGS_PROMISES = [
+  "guarantee", "guaranteed", "you will save", "you'll save", "we will save you",
+  "i will save you", "i can save you", "we can save you", "save you $",
+  "cut your fees by", "lower your rate to", "drop your rate to",
+  "your fees will drop", "in savings",
+];
+
 test("RULE 3 — no savings number is promised before a statement is read", () => {
-  const t = allText(generateCampaign(autoLead(), PERSONAL));
-  for (const banned of ["guarantee", "guaranteed", "you will save", "we will save you", "save you $"]) {
-    assert.ok(!t.includes(banned), `must not say "${banned}"`);
+  for (const track of ["displacement", "greenfield"]) {
+    const t = allText(generateCampaign(autoLead({ track, review_count: track === "greenfield" ? 2 : 140 }), PERSONAL));
+
+    for (const banned of SAVINGS_PROMISES) {
+      assert.ok(!t.includes(banned), `${track}: must not say "${banned}"`);
+    }
+
+    // The phrase list only catches phrasings someone thought of. This catches
+    // the shape: any figure sitting in the same sentence as a savings word.
+    for (const sentence of sentences(t)) {
+      if (!/\$\s?\d/.test(sentence)) continue;
+      assert.ok(!/sav\w*/.test(sentence),
+        `${track}: a dollar figure and a savings claim share a sentence — "${sentence.trim()}"`);
+    }
+
+    // And every track has to point at the statement instead of guessing.
+    assert.ok(/statement|no obligation|no cost/.test(t), track);
   }
-  assert.ok(t.includes("cannot tell you what you would save") || t.includes("no obligation"));
+});
+
+// Greenfield has no statement to read and no volume to do arithmetic on, so it
+// carries no figure at all. Not an accident worth leaving untested: a number
+// here could only ever be invented.
+test("RULE 3 — greenfield quotes no figure whatsoever", () => {
+  const t = allText(generateCampaign(autoLead({ track: "greenfield", review_count: 2 }), PERSONAL));
+  assert.equal(t.match(/\$\s?\d/g), null, "greenfield must not quote a dollar figure");
+  assert.equal(t.match(/sav\w*/g), null, "greenfield must not raise savings at all");
+});
+
+// Displacement does carry an illustration ($700 repair order, north of $20).
+// That is a COST figure, and it stays one: it is what they hand the networks,
+// never what they get back. The refusal to quote a saving has to be explicit.
+test("RULE 3 — the displacement illustration stays a cost, never a saving", () => {
+  const t = allText(generateCampaign(autoLead(), PERSONAL));
+  assert.ok(t.includes("cannot tell you what you would save"),
+    "the copy must refuse to quote a saving before reading a statement");
+  assert.ok(t.includes("repair order"), "the figure must be framed against a repair order");
 });
 
 test("a fingerprinted shop platform is named; a processor guess is not", () => {
