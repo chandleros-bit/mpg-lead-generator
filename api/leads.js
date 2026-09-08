@@ -7,9 +7,26 @@ import { fetchTabcNew } from "../lib/tabc.js";
 // Vercel routes by file path: api/leads.js serves /api/leads. No route export
 // needed — and none wanted, since `config` is a reserved export name here.
 //
-// The handler takes a Web Request and returns a Web Response. That is Vercel's
-// Node runtime signature as well as Netlify Functions v2's, which is why this
-// body did not change when the platform did.
+// Exported as `GET`, not as a default, and that is load-bearing. Vercel's Node
+// builder picks the calling convention off the export shape:
+//
+//   listener = unwrapDefaults(listener);          // follows mod.default up to 5x
+//   isWebHandler = HTTP_METHODS.some(m => typeof listener[m] === "function")
+//                  || typeof listener.fetch === "function";
+//   if (isWebHandler) return createWebHandler(listener);
+//   if (typeof listener === "function") return listener;   // Node (req, res)
+//
+// A bare `export default async function handler(req)` unwraps to the function
+// itself, which carries no GET and no fetch, so it is invoked as a Node handler
+// with an IncomingMessage. `req.url` is then relative ("/api/leads?demo=1") and
+// the `new URL(req.url)` below throws TypeError: Invalid URL before any of this
+// runs — a FUNCTION_INVOCATION_FAILED on every request. Netlify Functions v2
+// read the Web signature straight off a default export, which is why the body
+// survived the platform move unchanged but the export did not.
+//
+// Adding a default export back would also break it: unwrapDefaults follows
+// `default` first and would hide this named export. test/function.test.js
+// asserts both halves.
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -30,7 +47,7 @@ function milesToMeters(milesParam, fallbackMeters) {
   return Math.min(MAX_RADIUS_METERS, Math.round(clamped * METERS_PER_MILE));
 }
 
-export default async function handler(req) {
+export async function GET(req) {
   const cfg = loadConfig();
   const requestStart = Date.now();
   const deadline = requestStart + (cfg.enrichment?.global_budget_ms ?? 6000);

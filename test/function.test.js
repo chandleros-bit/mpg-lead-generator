@@ -1,7 +1,45 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import handler from "../api/leads.js";
+import * as leadsModule from "../api/leads.js";
+
+const { GET: handler } = leadsModule;
+
+// Vercel's Node builder decides how to invoke a function from its export shape,
+// in @vercel/node/dist/bundling-handler.js:
+//
+//   listener = unwrapDefaults(listener);          // follows mod.default up to 5x
+//   isWebHandler = HTTP_METHODS.some(m => typeof listener[m] === "function")
+//                  || typeof listener.fetch === "function";
+//   if (isWebHandler) return createWebHandler(listener);
+//   if (typeof listener === "function") return listener;   // Node (req, res)
+//
+// A bare `export default async function handler(req)` unwraps to the function
+// itself, which has no GET and no fetch — so it is invoked as a Node handler,
+// `req` is an IncomingMessage whose `.url` is relative, and `new URL(req.url)`
+// throws TypeError: Invalid URL before a line of our code runs. In production
+// that surfaces as FUNCTION_INVOCATION_FAILED and a plain-text error page.
+//
+// Netlify Functions v2 read the Web signature off a bare default export, so
+// this only broke on the move to Vercel. Asserted rather than remembered.
+const VERCEL_HTTP_METHODS = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"];
+
+test("the module exports a shape Vercel invokes as a Web handler", () => {
+  let listener = leadsModule;
+  for (let i = 0; i < 5 && listener && listener.default; i++) listener = listener.default;
+
+  const isWebHandler =
+    VERCEL_HTTP_METHODS.some((m) => typeof listener[m] === "function") ||
+    typeof listener.fetch === "function";
+
+  assert.ok(isWebHandler,
+    "api/leads.js must export a named HTTP method (or fetch); a bare default export " +
+    "is invoked with Node's (req, res) and crashes on new URL(req.url)");
+  assert.equal(typeof leadsModule.GET, "function");
+  // A default export would be unwrapped first and would hide the GET export.
+  assert.equal(leadsModule.default, undefined,
+    "a default export shadows the named one during Vercel's unwrapDefaults");
+});
 
 const require = createRequire(import.meta.url);
 const DEMO_RAW = require("../public/demo_places.json");
