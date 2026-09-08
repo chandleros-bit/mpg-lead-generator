@@ -1,6 +1,7 @@
 import { buildResearchLinks } from "./research.js";
 import { leadsToCsv } from "./csv.js";
 import { sortLeads, BUCKET_ORDER } from "./sort.js";
+import { readResponse, errorMessage } from "./response.js";
 
 (function () {
   "use strict";
@@ -298,7 +299,7 @@ import { sortLeads, BUCKET_ORDER } from "./sort.js";
     }
 
     fetch(url, opts)
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+      .then(readResponse)
       .then(function (res) {
         if (res.status === 401) {
           localStorage.removeItem(PASS_KEY);
@@ -306,17 +307,20 @@ import { sortLeads, BUCKET_ORDER } from "./sort.js";
             "Click Refresh leads to try again.</div>";
           return;
         }
-        if (!res.ok) {
+        // A 200 whose body is not JSON is not a success: reading .leads off it
+        // would throw further down, where the cause is no longer visible.
+        if (!res.ok || !res.parsed) {
           el.leads.innerHTML = '<div class="empty"><strong>Could not load leads.</strong>' +
-            esc(res.d.error || "Unknown error") + "</div>";
+            esc(errorMessage(res)) + "</div>";
           return;
         }
-        state.leads = res.d.leads || [];
-        state.threshold = res.d.threshold || 40;
-        setModeBadge(res.d.demo);
-        paintStats(res.d.summary);
-        var cf = (res.d.summary && res.d.summary.chainsFiltered) || 0;
-        var clf = (res.d.summary && res.d.summary.closedFiltered) || 0;
+        var d = res.data;
+        state.leads = d.leads || [];
+        state.threshold = d.threshold || 40;
+        setModeBadge(d.demo);
+        paintStats(d.summary);
+        var cf = (d.summary && d.summary.chainsFiltered) || 0;
+        var clf = (d.summary && d.summary.closedFiltered) || 0;
         if (state.verticals.length) {
           setContext(state.verticals, el.milesInput.value);
           var ctx = document.getElementById("context");
@@ -332,6 +336,9 @@ import { sortLeads, BUCKET_ORDER } from "./sort.js";
         render();
       })
       .catch(function (e) {
+        // Only a genuine transport failure gets here now. readResponse turns a
+        // non-JSON body into data rather than a throw, so this no longer
+        // misreports a server that answered with an error page.
         el.leads.innerHTML = '<div class="empty"><strong>Could not reach the server.</strong>' +
           esc(String(e)) + "</div>";
       })
