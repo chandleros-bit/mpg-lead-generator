@@ -1,4 +1,4 @@
-// Pure lead-list → CSV serializer. Browser-loaded from public/ (Netlify's publish
+// Pure lead-list → CSV serializer. Browser-loaded from public/ (the static output
 // dir) and unit-tested with node --test. No DOM here.
 //
 // RFC 4180: a field is wrapped in double quotes when it contains a comma, a

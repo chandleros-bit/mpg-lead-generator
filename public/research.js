@@ -1,5 +1,5 @@
 // Pure builder for the "Who to ask for" research links. Browser-loaded from
-// public/ (Netlify's publish dir) and unit-tested with node --test. No DOM here.
+// public/ (the static output dir) and unit-tested with node --test. No DOM here.
 const COMPTROLLER_URL = "https://mycpa.cpa.state.tx.us/coa/";
 
 export function buildResearchLinks(lead) {

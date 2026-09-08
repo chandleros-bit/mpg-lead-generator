@@ -1,11 +1,15 @@
-import { loadConfig, cfgDict } from "../../lib/config.js";
-import { fetchAllVerticals, loadDemoBusinesses } from "../../lib/fetcher.js";
-import { geocodeAddress, looksLikeCoords } from "../../lib/geocode.js";
-import { buildLeads, summarize } from "../../lib/pipeline.js";
-import { fetchTabcNew } from "../../lib/tabc.js";
+import { loadConfig, cfgDict } from "../lib/config.js";
+import { fetchAllVerticals, loadDemoBusinesses } from "../lib/fetcher.js";
+import { geocodeAddress, looksLikeCoords } from "../lib/geocode.js";
+import { buildLeads, summarize } from "../lib/pipeline.js";
+import { fetchTabcNew } from "../lib/tabc.js";
 
-// Netlify Functions v2: route /api/leads directly to this function.
-export const config = { path: "/api/leads" };
+// Vercel routes by file path: api/leads.js serves /api/leads. No route export
+// needed — and none wanted, since `config` is a reserved export name here.
+//
+// The handler takes a Web Request and returns a Web Response. That is Vercel's
+// Node runtime signature as well as Netlify Functions v2's, which is why this
+// body did not change when the platform did.
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {

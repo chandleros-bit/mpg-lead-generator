@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import handler from "../netlify/functions/leads.js";
+import handler from "../api/leads.js";
 
 const require = createRequire(import.meta.url);
 const DEMO_RAW = require("../public/demo_places.json");
