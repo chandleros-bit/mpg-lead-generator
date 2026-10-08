@@ -9,7 +9,8 @@
     "state": "TX",
     "zip": "77433-1200",
     "county": "Harris",
-    "current_issued_date": "2026-06-15T00:00:00.000"
+    "current_issued_date": "2026-09-01T00:00:00.000",
+    "original_issue_date": "2026-06-15T00:00:00.000"
   },
   {
     "license_id": "200070001",
@@ -21,7 +22,8 @@
     "state": "TX",
     "zip": "77494",
     "county": "Fort Bend",
-    "current_issued_date": "2026-06-20T00:00:00.000"
+    "current_issued_date": "2026-09-01T00:00:00.000",
+    "original_issue_date": "2026-06-20T00:00:00.000"
   },
   {
     "license_id": "200070002",
@@ -33,7 +35,11 @@
     "state": "TX",
     "zip": "77081-6967",
     "county": "Harris",
-    "current_issued_date": "2026-06-18T00:00:00.000"
+    "current_issued_date": "2026-09-01T00:00:00.000",
+    "original_issue_date": "2026-06-18T00:00:00.000"
   },
-  { "license_id": "NONAME", "license_type": "MB" }
+  {
+    "license_id": "NONAME",
+    "license_type": "MB"
+  }
 ]
