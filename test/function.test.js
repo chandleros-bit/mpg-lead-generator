@@ -208,3 +208,105 @@ test("live enrichment failure still returns scored leads", async () => {
     assert.equal(typeof d.summary.chainsFiltered, "number");
   } finally { globalThis.fetch = orig; }
 });
+
+// ---------- market + vertical picker ----------
+
+function geocodeHit({ lat = 32.78, lng = -96.8, city = "Dallas", state = "TX", county = "Dallas County" } = {}) {
+  return {
+    status: "OK",
+    results: [{
+      geometry: { location: { lat, lng } },
+      address_components: [
+        { long_name: city, short_name: city, types: ["locality", "political"] },
+        { long_name: county, short_name: county, types: ["administrative_area_level_2", "political"] },
+        { long_name: "Texas", short_name: state, types: ["administrative_area_level_1", "political"] },
+      ],
+    }],
+  };
+}
+
+test("city + state geocodes the market, scopes TABC to its county, and returns the market", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    if (String(url).includes("maps/api/geocode")) return new Response(JSON.stringify(geocodeHit()), { status: 200 });
+    if (String(url).includes("data.texas.gov")) return new Response("[]", { status: 200 });
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?city=Dallas&state=TX&vertical=restaurant",
+      { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 200);
+    const d = await res.json();
+    assert.deepEqual(d.market, { city: "Dallas", state: "TX" });
+    assert.deepEqual(d.verticals, ["restaurant"]);
+    const tabc = decodeURIComponent(urls.find((u) => u.includes("data.texas.gov")));
+    assert.ok(tabc.includes("'DALLAS'"));
+    assert.ok(!tabc.includes("HARRIS"));
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test("TABC is skipped outside Texas and for verticals it cannot serve", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  for (const [qs, geo] of [
+    ["city=Tampa&state=FL&vertical=restaurant", geocodeHit({ city: "Tampa", state: "FL", county: "Hillsborough County" })],
+    ["city=Dallas&state=TX&vertical=auto_repair", geocodeHit()],
+  ]) {
+    const urls = [];
+    globalThis.fetch = async (url) => {
+      urls.push(String(url));
+      if (String(url).includes("maps/api/geocode")) return new Response(JSON.stringify(geo), { status: 200 });
+      return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+    };
+    try {
+      const res = await handler(new Request(`http://x/api/leads?${qs}`, { headers: { "x-app-passphrase": "right" } }));
+      assert.equal(res.status, 200, qs);
+      assert.ok(!urls.some((u) => u.includes("data.texas.gov")), qs);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  }
+});
+
+test("an unknown city is a 400 and an unknown vertical is a 400", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ status: "ZERO_RESULTS", results: [] }), { status: 200 });
+  try {
+    const r1 = await handler(new Request("http://x/api/leads?city=Nowhereville&state=TX", { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(r1.status, 400);
+    const r2 = await handler(new Request("http://x/api/leads?vertical=plumbers_on_mars", { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(r2.status, 400);
+  } finally {
+    globalThis.fetch = orig;
+  }
+});
+
+test("the market city reaches the campaign copy", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("maps/api/geocode")) return new Response(JSON.stringify(geocodeHit({ city: "Katy" })), { status: 200 });
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?city=Katy&state=TX&vertical=salon",
+      { headers: { "x-app-passphrase": "right" } }));
+    const d = await res.json();
+    assert.ok(d.leads.length > 0);
+    const all = d.leads.map((l) => l.campaign.email1_body).join(" ");
+    assert.ok(all.includes("Katy"));
+    assert.ok(!all.includes("Houston"));
+  } finally {
+    globalThis.fetch = orig;
+  }
+});

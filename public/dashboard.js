@@ -13,8 +13,18 @@ import { readResponse, errorMessage } from "./response.js";
 
   var DEMO = new URLSearchParams(location.search).get("demo") === "1";
   var PASS_KEY = "mpg_pass";
-  var LOC_KEY = "mpg_loc";
+  var LOC_KEY = "mpg_loc"; // pre-market free-text location, migrated into City
+  var CITY_KEY = "mpg_city";
+  var STATE_KEY = "mpg_state";
+  var VERTICAL_KEY = "mpg_vertical";
   var MILES_KEY = "mpg_miles";
+  var labels = {}; // vertical id -> picker label
+  var defaultMarket = null;
+
+  // Storage can throw (private mode, blocked site data). The controls still
+  // work without it; they just don't remember.
+  function store(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { /* ignore */ } }
+  function recall(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
   function getPass() { return localStorage.getItem(PASS_KEY) || ""; }
   function ensurePass() {
@@ -28,18 +38,69 @@ import { readResponse, errorMessage } from "./response.js";
 
   function milesFromMeters(m) { return Math.max(1, Math.round(m / 1609.344)); }
 
-  function setContext(verticals, miles) {
+  function verticalNames(ids) {
+    return ids.map(function (id) { return labels[id] || id.replace(/_/g, " "); }).join(", ");
+  }
+
+  function marketName(m) {
+    if (!m || !m.city) return "";
+    return m.city + (m.state ? ", " + m.state : "");
+  }
+
+  function setContext(verticals, miles, market) {
+    var where = marketName(market);
     document.getElementById("context").innerHTML =
-      "Searching <strong>" + esc(verticals.join(", ")) + "</strong> within " +
+      "Searching <strong>" + esc(verticalNames(verticals)) + "</strong>" +
+      (where ? " in <strong>" + esc(where) + "</strong>" : "") + " within " +
       "<strong>" + esc(miles) + " mi</strong>. Target score <strong>" + state.threshold +
       "+</strong>. Leads below target sit under the divider.";
   }
 
+  // What the controls currently ask for, before the server has answered.
+  function pendingVerticals() {
+    var v = el.verticalInput.value;
+    return v && v !== "default" ? [v] : state.verticals;
+  }
+  function pendingMarket() {
+    var city = el.cityInput.value.trim();
+    return city ? { city: city, state: el.stateInput.value } : defaultMarket;
+  }
+
   function initShell() {
-    if (DEMO) { el.locInput.disabled = true; el.milesInput.disabled = true; }
-    var savedLoc = localStorage.getItem(LOC_KEY);
-    if (savedLoc) el.locInput.value = savedLoc;
-    var savedMiles = localStorage.getItem(MILES_KEY);
+    if (DEMO) {
+      el.cityInput.disabled = true; el.stateInput.disabled = true;
+      el.verticalInput.disabled = true; el.milesInput.disabled = true;
+    }
+    var savedCity = recall(CITY_KEY) || recall(LOC_KEY);
+    if (savedCity) el.cityInput.value = savedCity;
+    var savedState = recall(STATE_KEY);
+    var savedVertical = recall(VERTICAL_KEY);
+    var savedMiles = recall(MILES_KEY);
+
+    fetch("verticals.json")
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        var featured = list.filter(function (v) { return v.featured; });
+        var other = list.filter(function (v) { return !v.featured; });
+        function group(name, items) {
+          if (!items.length) return;
+          var g = document.createElement("optgroup");
+          g.label = name;
+          items.forEach(function (v) {
+            labels[v.id] = v.label;
+            var o = document.createElement("option");
+            o.value = v.id; o.textContent = v.label;
+            g.appendChild(o);
+          });
+          el.verticalInput.appendChild(g);
+        }
+        group("Niches", featured);
+        group("Broad", other);
+        if (savedVertical && labels[savedVertical]) el.verticalInput.value = savedVertical;
+        setContext(pendingVerticals(), el.milesInput.value, pendingMarket());
+      })
+      .catch(function () { /* picker falls back to the config list */ });
+
     fetch("config.json")
       .then(function (r) { return r.json(); })
       .then(function (cfg) {
@@ -49,9 +110,12 @@ import { readResponse, errorMessage } from "./response.js";
         if (cfg.personal.name) { op.textContent = cfg.personal.name; op.hidden = false; }
         state.threshold = cfg.search.score_threshold || 40;
         state.verticals = cfg.search.verticals || [];
+        defaultMarket = cfg.search.market || null;
+        el.stateInput.value = savedState || (defaultMarket && defaultMarket.state) || "TX";
+        el.cityInput.placeholder = "City or ZIP, blank uses " + (marketName(defaultMarket) || "default");
         var miles = savedMiles || String(milesFromMeters(cfg.search.radius_meters));
         el.milesInput.value = miles;
-        setContext(state.verticals, miles);
+        setContext(pendingVerticals(), miles, pendingMarket());
       })
       .catch(function () { /* shell is best-effort; leads still load */ });
   }
@@ -70,7 +134,9 @@ import { readResponse, errorMessage } from "./response.js";
     refresh: document.getElementById("refresh"),
     search: document.getElementById("search"),
     sort: document.getElementById("sort"),
-    locInput: document.getElementById("loc-input"),
+    cityInput: document.getElementById("city-input"),
+    stateInput: document.getElementById("state-input"),
+    verticalInput: document.getElementById("vertical-input"),
     milesInput: document.getElementById("miles-input"),
     downloadCsv: document.getElementById("download-csv"),
   };
@@ -156,11 +222,18 @@ import { readResponse, errorMessage } from "./response.js";
     return '<div class="research-owner">Owner: ' + bits.join(" · ") + "</div>";
   }
 
+  function askLine(lead) {
+    var who = lead.decision_makers || [];
+    if (!who.length) return "";
+    return '<div class="research-ask">Ask for: ' + esc(who.join(", then ")) + "</div>";
+  }
+
   function researchPanel(lead) {
     var links = buildResearchLinks(lead).map(researchLinkEl).join("");
     return (
       '<div class="research-inner">' +
         '<div class="research-head">Who to ask for · research before you call</div>' +
+        askLine(lead) +
         ownerLine(lead) +
         '<div class="research-links">' + links + "</div>" +
       "</div>"
@@ -236,7 +309,7 @@ import { readResponse, errorMessage } from "./response.js";
     if (!rows.length) {
       el.leads.innerHTML =
         '<div class="empty"><strong>No leads match this view.</strong>' +
-        "Clear the filter, or widen your search radius and verticals in config.json.</div>";
+        "Clear the filter, widen the distance, or try another vertical or city.</div>";
       return;
     }
     var BUCKET_DIVIDER = {
@@ -285,15 +358,21 @@ import { readResponse, errorMessage } from "./response.js";
     if (DEMO) {
       url = "/api/leads?demo=1";
     } else {
-      var loc = el.locInput.value.trim();
+      var city = el.cityInput.value.trim();
+      var st = el.stateInput.value;
+      var vertical = el.verticalInput.value;
       var miles = el.milesInput.value.trim();
-      if (loc) { localStorage.setItem(LOC_KEY, loc); } else { localStorage.removeItem(LOC_KEY); }
-      if (miles) { localStorage.setItem(MILES_KEY, miles); }
+      store(CITY_KEY, city);
+      store(LOC_KEY, null);
+      store(STATE_KEY, st);
+      store(VERTICAL_KEY, vertical);
+      if (miles) store(MILES_KEY, miles);
       var qs = [];
-      if (loc) qs.push("location=" + encodeURIComponent(loc));
+      if (city) { qs.push("city=" + encodeURIComponent(city)); qs.push("state=" + encodeURIComponent(st)); }
+      if (vertical && vertical !== "default") qs.push("vertical=" + encodeURIComponent(vertical));
       if (miles) qs.push("miles=" + encodeURIComponent(miles));
       url = "/api/leads" + (qs.length ? "?" + qs.join("&") : "");
-      if (state.verticals.length) setContext(state.verticals, miles || el.milesInput.value);
+      setContext(pendingVerticals(), miles || el.milesInput.value, pendingMarket());
       var p = ensurePass();
       opts.headers = { "X-App-Passphrase": p };
     }
@@ -321,8 +400,11 @@ import { readResponse, errorMessage } from "./response.js";
         paintStats(d.summary);
         var cf = (d.summary && d.summary.chainsFiltered) || 0;
         var clf = (d.summary && d.summary.closedFiltered) || 0;
-        if (state.verticals.length) {
-          setContext(state.verticals, el.milesInput.value);
+        // The server's answer is authoritative: it is the geocoded city, not
+        // what was typed ("77494" comes back as Katy).
+        var ranVerticals = d.verticals || state.verticals;
+        if (ranVerticals.length) {
+          setContext(ranVerticals, el.milesInput.value, d.market || pendingMarket());
           var ctx = document.getElementById("context");
           if (cf > 0) {
             ctx.innerHTML +=
@@ -394,6 +476,13 @@ import { readResponse, errorMessage } from "./response.js";
   el.search.addEventListener("input", function () { state.query = el.search.value.toLowerCase().trim(); render(); });
   el.sort.addEventListener("change", function () { state.sort = el.sort.value; render(); });
   el.refresh.addEventListener("click", load);
+  // Changing what to search only updates the context line. A run costs API
+  // calls, so it starts on Refresh, not on every keystroke.
+  function previewContext() { setContext(pendingVerticals(), el.milesInput.value, pendingMarket()); }
+  el.verticalInput.addEventListener("change", previewContext);
+  el.stateInput.addEventListener("change", previewContext);
+  el.cityInput.addEventListener("change", previewContext);
+  el.cityInput.addEventListener("keydown", function (e) { if (e.key === "Enter") load(); });
 
   // Download the current (filtered/sorted/searched) view as a CSV the user can
   // open in a spreadsheet. No-op when the view is empty so we never save a

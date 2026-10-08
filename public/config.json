@@ -1,6 +1,7 @@
 {
   "search": {
     "radius_meters": 15000,
+    "market": { "city": "Houston", "state": "TX" },
     "verticals": ["auto_repair", "restaurant", "bar", "cafe", "retail", "salon", "spa", "auto", "professional"],
     "score_threshold": 55
   },

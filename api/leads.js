@@ -1,6 +1,7 @@
 import { loadConfig, cfgDict } from "../lib/config.js";
 import { fetchAllVerticals, loadDemoBusinesses } from "../lib/fetcher.js";
-import { geocodeAddress, looksLikeCoords } from "../lib/geocode.js";
+import { geocodeAddress, geocodeMarket, looksLikeCoords } from "../lib/geocode.js";
+import { getVertical } from "../lib/verticals/index.js";
 import { buildLeads, summarize } from "../lib/pipeline.js";
 import { fetchTabcNew } from "../lib/tabc.js";
 
@@ -47,6 +48,20 @@ function milesToMeters(milesParam, fallbackMeters) {
   return Math.min(MAX_RADIUS_METERS, Math.round(clamped * METERS_PER_MILE));
 }
 
+// TABC licenses are Texas, and only bars and restaurants. Any other run skips
+// the call entirely rather than fetching rows the pipeline would discard.
+const TABC_VERTICALS = new Set(["bar", "restaurant"]);
+
+// One vertical per run when the dashboard picks one; the config list when it
+// doesn't ("default" or absent). An unknown id is a 400, not a silent fallback:
+// searching the wrong niche looks exactly like an empty market.
+export function resolveVerticals(param, cfgVerticals) {
+  const v = String(param || "").trim();
+  if (!v || v === "default") return { verticals: cfgVerticals };
+  if (!getVertical(v)) return { error: `Unknown vertical "${v}".` };
+  return { verticals: [v] };
+}
+
 export async function GET(req) {
   const cfg = loadConfig();
   const requestStart = Date.now();
@@ -64,6 +79,12 @@ export async function GET(req) {
     }
   }
 
+  const picked = resolveVerticals(url.searchParams.get("vertical"), cfg.search.verticals);
+  if (picked.error) return json({ error: picked.error }, 400);
+  const verticals = picked.verticals;
+  let market = cfg.search.market ?? null;
+  let tabcCounties = cfg.sources?.tabc?.counties ?? [];
+
   let businesses;
   try {
     if (demo) {
@@ -71,10 +92,23 @@ export async function GET(req) {
     } else {
       const s = cfg.search;
       const rawLoc = (url.searchParams.get("location") || "").trim();
+      const city = (url.searchParams.get("city") || "").trim();
+      const state = (url.searchParams.get("state") || "").trim().toUpperCase();
       const radiusMeters = milesToMeters(url.searchParams.get("miles"), s.radius_meters);
 
       let location = s.location;
-      if (rawLoc) {
+      if (city) {
+        // The market path: one city (or ZIP) and a state per run.
+        const m = await geocodeMarket(cfg.apiKey, city, state);
+        if (!m) {
+          return json({ error: "Couldn't find that city. Check the spelling or try a ZIP." }, 400);
+        }
+        location = m.location;
+        market = { city: m.city, state: m.state };
+        // County-filtered sources follow the market, so a Dallas run doesn't
+        // pull Harris County licenses.
+        tabcCounties = m.county ? [m.county] : [];
+      } else if (rawLoc) {
         if (looksLikeCoords(rawLoc)) {
           location = rawLoc;
         } else {
@@ -90,14 +124,15 @@ export async function GET(req) {
         apiKey: cfg.apiKey,
         location,
         radiusMeters,
-        verticals: s.verticals,
+        verticals,
         maxResults: s.batch_size ?? 20,
       });
 
       const t = cfg.sources?.tabc;
-      if (t?.enabled) {
+      const inTexas = !market || String(market.state || "").toUpperCase() === "TX";
+      if (t?.enabled && inTexas && verticals.some((v) => TABC_VERTICALS.has(v))) {
         const tabc = await fetchTabcNew({
-          counties: t.counties, sinceDays: t.since_days,
+          counties: tabcCounties, sinceDays: t.since_days,
           appToken: process.env[t.app_token_env] || null, fetchImpl: fetch,
         });
         businesses = businesses.concat(tabc);
@@ -108,11 +143,16 @@ export async function GET(req) {
   }
 
   const deps = demo ? {} : { fetchImpl: fetch, deadline };
-  const { rows, chainsFiltered, closedFiltered } = await buildLeads(cfgDict(cfg), businesses, deps);
+  const run = cfgDict(cfg);
+  run.search = { ...run.search, verticals };
+  run.market = market;
+  const { rows, chainsFiltered, closedFiltered } = await buildLeads(run, businesses, deps);
   return json({
     leads: rows,
     summary: { ...summarize(rows), chainsFiltered, closedFiltered },
     demo,
     threshold: cfg.search.score_threshold ?? 40,
+    verticals,
+    market,
   });
 }

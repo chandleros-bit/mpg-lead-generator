@@ -17,6 +17,8 @@ const CLIENT_READS = [
   ["search", "score_threshold"],
   ["search", "verticals"],
   ["search", "radius_meters"],
+  ["search", "market", "city"],
+  ["search", "market", "state"],
 ];
 
 const at = (obj, path) => path.reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -48,10 +50,11 @@ test("loadConfig returns null secrets when env is unset", () => {
   assert.equal(cfg.passphrase, null);
 });
 
-test("cfgDict exposes search/personal/weights/enrichment", () => {
+test("cfgDict exposes search/personal/weights/enrichment and the default market", () => {
   const cfg = loadConfig();
   const d = cfgDict(cfg);
-  assert.deepEqual(Object.keys(d).sort(), ["enrichment", "personal", "search", "weights"]);
+  assert.deepEqual(Object.keys(d).sort(), ["enrichment", "market", "personal", "search", "weights"]);
+  assert.deepEqual(d.market, cfg.search.market);
 });
 
 // ---------- public/config.json is the browser's view, nothing more ----------

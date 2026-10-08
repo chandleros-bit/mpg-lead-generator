@@ -76,3 +76,10 @@ test("placeMatchesVertical keeps auto repair type-only", () => {
   assert.ok(placeMatchesVertical("car_repair", "auto_repair", "Anything"));
   assert.ok(!placeMatchesVertical(null, "auto_repair", "Joe's Auto Repair"));
 });
+
+test("public/verticals.json matches the registry (the dashboard picker reads it)", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const onDisk = JSON.parse(await readFile(new URL("../public/verticals.json", import.meta.url), "utf8"));
+  assert.deepEqual(onDisk, listVerticals(),
+    "out of date: run npm run sync-verticals");
+});

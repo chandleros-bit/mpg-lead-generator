@@ -59,3 +59,10 @@ test("builder returns 4 entries with a website, 3 without", () => {
   assert.equal(buildResearchLinks(lead()).length, 4);
   assert.equal(buildResearchLinks(lead({ website: "" })).length, 3);
 });
+
+test("TX Comptroller link is dropped for an out-of-state address", () => {
+  const fl = buildResearchLinks({ name: "Bay Dental", address: "100 Main St, Tampa, FL 33602", place_id: "x" });
+  assert.ok(!fl.some((l) => l.label === "TX Comptroller"));
+  const tx = buildResearchLinks({ name: "Katy Dental", address: "100 Main St, Katy, TX 77494", place_id: "y" });
+  assert.ok(tx.some((l) => l.label === "TX Comptroller"));
+});

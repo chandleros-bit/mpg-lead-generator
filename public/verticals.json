@@ -1,0 +1,47 @@
+[
+  {
+    "id": "auto_repair",
+    "label": "Auto repair",
+    "featured": true
+  },
+  {
+    "id": "restaurant",
+    "label": "Restaurants",
+    "featured": false
+  },
+  {
+    "id": "bar",
+    "label": "Bars",
+    "featured": false
+  },
+  {
+    "id": "cafe",
+    "label": "Cafes",
+    "featured": false
+  },
+  {
+    "id": "retail",
+    "label": "Retail",
+    "featured": false
+  },
+  {
+    "id": "salon",
+    "label": "Salons",
+    "featured": false
+  },
+  {
+    "id": "spa",
+    "label": "Spas",
+    "featured": false
+  },
+  {
+    "id": "auto",
+    "label": "Car wash and parts",
+    "featured": false
+  },
+  {
+    "id": "professional",
+    "label": "Professional services",
+    "featured": false
+  }
+]
