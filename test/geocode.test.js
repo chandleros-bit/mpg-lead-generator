@@ -88,13 +88,43 @@ test("geocodeMarket resolves through Places Text Search: center, city, state, co
   } finally { globalThis.fetch = orig; }
 });
 
-test("geocodeMarket returns null when nothing matches and throws on an API error", async () => {
+test("geocodeMarket returns null when nothing matches", async () => {
   const { geocodeMarket } = await import("../lib/geocode.js");
   const orig = globalThis.fetch;
   try {
     globalThis.fetch = async () => new Response(JSON.stringify({}), { status: 200 });
     assert.equal(await geocodeMarket("k", "Nowhere", "TX"), null);
-    globalThis.fetch = async () => new Response("PERMISSION_DENIED", { status: 403 });
-    await assert.rejects(() => geocodeMarket("k", "Katy", "TX"), /403/);
+  } finally { globalThis.fetch = orig; }
+});
+
+test("geocodeMarket falls back to Nominatim when Google refuses", async () => {
+  const { geocodeMarket } = await import("../lib/geocode.js");
+  const orig = globalThis.fetch;
+  let ua = null;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes("places:searchText")) {
+      return new Response('{"error":{"code":403,"status":"PERMISSION_DENIED"}}', { status: 403 });
+    }
+    ua = opts.headers["User-Agent"];
+    return new Response(JSON.stringify([{
+      lat: "29.7858", lon: "-95.8245",
+      address: { town: "Katy", county: "Fort Bend County", state: "Texas", "ISO3166-2-lvl4": "US-TX", postcode: "77494" },
+    }]), { status: 200 });
+  };
+  try {
+    const m = await geocodeMarket("k", "77494", "TX");
+    assert.deepEqual(m, { location: "29.7858,-95.8245", city: "Katy", state: "TX", county: "Fort Bend" });
+    assert.ok(ua && ua.includes("mpg-lead-generator"), "Nominatim requires an identifying User-Agent");
+  } finally { globalThis.fetch = orig; }
+});
+
+test("geocodeMarket reports Google's error when the backup also fails", async () => {
+  const { geocodeMarket } = await import("../lib/geocode.js");
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (url) => String(url).includes("places:searchText")
+    ? new Response("PERMISSION_DENIED", { status: 403 })
+    : new Response("busy", { status: 503 });
+  try {
+    await assert.rejects(() => geocodeMarket("k", "Katy", "TX"), /403.*Backup lookup also failed: Nominatim 503/s);
   } finally { globalThis.fetch = orig; }
 });
