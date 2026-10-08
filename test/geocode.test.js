@@ -61,3 +61,37 @@ test("geocodeAddress still returns null when status is OK but results are empty"
     assert.equal(await geocodeAddress("k", "nowhere"), null);
   } finally { globalThis.fetch = orig; }
 });
+
+test("geocodeMarket returns center, city, state, and county without the County suffix", async () => {
+  const { geocodeMarket } = await import("../lib/geocode.js");
+  const orig = globalThis.fetch;
+  let called = "";
+  globalThis.fetch = async (url) => {
+    called = String(url);
+    return new Response(JSON.stringify({ status: "OK", results: [{
+      geometry: { location: { lat: 29.78, lng: -95.82 } },
+      address_components: [
+        { long_name: "77494", short_name: "77494", types: ["postal_code"] },
+        { long_name: "Katy", short_name: "Katy", types: ["locality", "political"] },
+        { long_name: "Fort Bend County", short_name: "Fort Bend County", types: ["administrative_area_level_2"] },
+        { long_name: "Texas", short_name: "TX", types: ["administrative_area_level_1"] },
+      ],
+    }] }), { status: 200 });
+  };
+  try {
+    const m = await geocodeMarket("k", "77494", "TX");
+    assert.deepEqual(m, { location: "29.78,-95.82", city: "Katy", state: "TX", county: "Fort Bend" });
+    assert.ok(decodeURIComponent(called).includes("77494, TX"));
+  } finally { globalThis.fetch = orig; }
+});
+
+test("geocodeMarket returns null on ZERO_RESULTS and throws on REQUEST_DENIED", async () => {
+  const { geocodeMarket } = await import("../lib/geocode.js");
+  const orig = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ status: "ZERO_RESULTS", results: [] }), { status: 200 });
+    assert.equal(await geocodeMarket("k", "Nowhere", "TX"), null);
+    globalThis.fetch = async () => new Response(JSON.stringify({ status: "REQUEST_DENIED", error_message: "bad key" }), { status: 200 });
+    await assert.rejects(() => geocodeMarket("k", "Katy", "TX"), /REQUEST_DENIED/);
+  } finally { globalThis.fetch = orig; }
+});

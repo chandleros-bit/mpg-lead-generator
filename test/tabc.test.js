@@ -48,3 +48,19 @@ test("fetchTabcNew swallows a fetch error and returns []", async () => {
   const fetchImpl = async () => { throw new Error("socrata down"); };
   assert.deepEqual(await fetchTabcNew({ counties: ["Harris"], sinceDays: 90, fetchImpl }), []);
 });
+
+test("tabcUrl filters on original_issue_date, never the renewal date", async () => {
+  const { tabcUrl } = await import("../lib/tabc.js");
+  const where = decodeURIComponent(tabcUrl({ counties: ["Harris"], sinceDays: 30 }));
+  assert.ok(where.includes("original_issue_date >="));
+  assert.ok(!where.includes("current_issued_date"));
+});
+
+test("licensed_on comes from original_issue_date even when a renewal is newer", () => {
+  const [row] = parseTabcRows([{
+    license_id: "1", trade_name: "Old Tavern", license_type: "MB",
+    original_issue_date: "1987-12-11T00:00:00.000",
+    current_issued_date: "2025-12-15T00:00:00.000",
+  }]);
+  assert.equal(row.licensed_on, "1987-12-11");
+});

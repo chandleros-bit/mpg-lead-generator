@@ -27,7 +27,12 @@ export function buildResearchLinks(lead) {
 
   // TX Comptroller — Taxable Entity Search. The page is a POST form and cannot be
   // pre-filled via URL, so the click handler copies the name to the clipboard.
-  links.push({ label: "TX Comptroller", href: COMPTROLLER_URL, copyName: name });
+  // Texas entities only: a Tampa run should not send the rep to Austin. An
+  // address with no state at all keeps the link, as it always did.
+  const st = (address.match(/,\s*([A-Z]{2})\s+\d{5}/) || [])[1];
+  if (!st || st === "TX") {
+    links.push({ label: "TX Comptroller", href: COMPTROLLER_URL, copyName: name });
+  }
 
   return links;
 }

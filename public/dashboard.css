@@ -307,11 +307,15 @@ body {
   padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
   min-width: 220px;
 }
+.field select {
+  font: inherit; text-transform: none; letter-spacing: normal; color: var(--ink);
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+}
 .field-unit input { min-width: 0; }
-.field input:disabled { opacity: .55; cursor: not-allowed; }
+.field input:disabled, .field select:disabled { opacity: .55; cursor: not-allowed; }
 @media (max-width: 720px) {
   .search-params { padding-left: 18px; padding-right: 18px; }
-  .field input { min-width: 0; width: 100%; }
+  .field input, .field select { min-width: 0; width: 100%; }
 }
 
 /* ---------- Who-to-ask-for research panel ---------- */
@@ -335,6 +339,7 @@ body {
   text-transform: uppercase; color: var(--muted);
   padding-bottom: 14px; border-bottom: 1px dashed var(--line); margin-bottom: 16px;
 }
+.research-ask { font-size: 13px; color: var(--ink); margin: 0 0 8px; }
 .research-links { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 .research-link {
   font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
