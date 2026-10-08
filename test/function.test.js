@@ -213,16 +213,21 @@ test("live enrichment failure still returns scored leads", async () => {
 
 function geocodeHit({ lat = 32.78, lng = -96.8, city = "Dallas", state = "TX", county = "Dallas County" } = {}) {
   return {
-    status: "OK",
-    results: [{
-      geometry: { location: { lat, lng } },
-      address_components: [
-        { long_name: city, short_name: city, types: ["locality", "political"] },
-        { long_name: county, short_name: county, types: ["administrative_area_level_2", "political"] },
-        { long_name: "Texas", short_name: state, types: ["administrative_area_level_1", "political"] },
+    places: [{
+      location: { latitude: lat, longitude: lng },
+      addressComponents: [
+        { longText: city, shortText: city, types: ["locality", "political"] },
+        { longText: county, shortText: county, types: ["administrative_area_level_2", "political"] },
+        { longText: "State", shortText: state, types: ["administrative_area_level_1", "political"] },
       ],
     }],
   };
+}
+
+// The market lookup and the lead search both hit Places; the market call is
+// the one asking for addressComponents.
+function isMarketCall(opts) {
+  return !!(opts && opts.headers && String(opts.headers["X-Goog-FieldMask"] || "").includes("addressComponents"));
 }
 
 test("city + state geocodes the market, scopes TABC to its county, and returns the market", async () => {
@@ -230,9 +235,9 @@ test("city + state geocodes the market, scopes TABC to its county, and returns t
   process.env.GOOGLE_PLACES_API_KEY = "key";
   const orig = globalThis.fetch;
   const urls = [];
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = async (url, opts) => {
     urls.push(String(url));
-    if (String(url).includes("maps/api/geocode")) return new Response(JSON.stringify(geocodeHit()), { status: 200 });
+    if (isMarketCall(opts)) return new Response(JSON.stringify(geocodeHit()), { status: 200 });
     if (String(url).includes("data.texas.gov")) return new Response("[]", { status: 200 });
     return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
   };
@@ -260,9 +265,9 @@ test("TABC is skipped outside Texas and for verticals it cannot serve", async ()
     ["city=Dallas&state=TX&vertical=auto_repair", geocodeHit()],
   ]) {
     const urls = [];
-    globalThis.fetch = async (url) => {
+    globalThis.fetch = async (url, opts) => {
       urls.push(String(url));
-      if (String(url).includes("maps/api/geocode")) return new Response(JSON.stringify(geo), { status: 200 });
+      if (isMarketCall(opts)) return new Response(JSON.stringify(geo), { status: 200 });
       return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
     };
     try {
@@ -279,7 +284,7 @@ test("an unknown city is a 400 and an unknown vertical is a 400", async () => {
   process.env.APP_PASSPHRASE = "right";
   process.env.GOOGLE_PLACES_API_KEY = "key";
   const orig = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({ status: "ZERO_RESULTS", results: [] }), { status: 200 });
+  globalThis.fetch = async () => new Response(JSON.stringify({}), { status: 200 });
   try {
     const r1 = await handler(new Request("http://x/api/leads?city=Nowhereville&state=TX", { headers: { "x-app-passphrase": "right" } }));
     assert.equal(r1.status, 400);
@@ -294,8 +299,8 @@ test("the market city reaches the campaign copy", async () => {
   process.env.APP_PASSPHRASE = "right";
   process.env.GOOGLE_PLACES_API_KEY = "key";
   const orig = globalThis.fetch;
-  globalThis.fetch = async (url) => {
-    if (String(url).includes("maps/api/geocode")) return new Response(JSON.stringify(geocodeHit({ city: "Katy" })), { status: 200 });
+  globalThis.fetch = async (url, opts) => {
+    if (isMarketCall(opts)) return new Response(JSON.stringify(geocodeHit({ city: "Katy" })), { status: 200 });
     return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
   };
   try {
