@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   detectProcessors, discoverCheckoutUrl, detectSiteProcessors,
   tierOf, isShopManagement,
-  PROCESSOR_SIGNATURES, CARD_PRESENT, AMBIGUOUS, ONLINE_CHECKOUT, SHOP_MANAGEMENT,
+  PROCESSOR_SIGNATURES, CARD_PRESENT, AMBIGUOUS, ONLINE_CHECKOUT, SHOP_MANAGEMENT, FINANCING,
 } from "../lib/processors.js";
 
 function resp(text, ok = true) { return { ok, text: async () => text }; }
@@ -13,9 +13,12 @@ function resp(text, ok = true) { return { ok, text: async () => text }; }
 
 test("every known signature has exactly one tier", () => {
   const names = Object.keys(PROCESSOR_SIGNATURES);
-  assert.equal(names.length, 14, "8 processors + 6 shop-management platforms");
+  // 8 processors, plus whatever management platforms and financing widgets
+  // the vertical packs register.
+  const expected = 8 + Object.keys(SHOP_MANAGEMENT).length + Object.keys(FINANCING).length;
+  assert.equal(names.length, expected);
   for (const n of names) {
-    const inGroups = [CARD_PRESENT, AMBIGUOUS, ONLINE_CHECKOUT, SHOP_MANAGEMENT]
+    const inGroups = [CARD_PRESENT, AMBIGUOUS, ONLINE_CHECKOUT, SHOP_MANAGEMENT, FINANCING]
       .filter((g) => n in g);
     assert.equal(inGroups.length, 1, `${n} must belong to exactly one tier group`);
   }
