@@ -36,6 +36,9 @@
   },
   "weights": {
     "displacement": {"dissatisfaction_max": 35, "keyword_pain_max": 12, "tech_max": 20, "volume_max": 20, "processor_max": 25, "processor_ambiguous_max": 10, "processor_integrated_max": 28, "high_ticket_max": 8, "icp_tiebreak": 3},
+    "displacement_profiles": {
+      "service": {"dissatisfaction_max": 15, "volume_max": 25, "volume_by_reviews": true, "volume_full_at": 150, "processor_integrated_max": 30, "high_ticket_max": 20, "financing_points": 10}
+    },
     "greenfield": {"recency_max": 40, "volume_potential_max": 30, "setup_gap_max": 27, "icp_tiebreak": 3},
     "website_unknown": {"tech_points": 8, "setup_gap_factor": 0.5},
     "volume_confidence": {"full_at": 20, "half_at": 10},
@@ -46,8 +49,8 @@
     "tabc": { "enabled": true, "counties": ["Harris", "Fort Bend"], "since_days": 120, "app_token_env": "TABC_APP_TOKEN" }
   },
   "enrichment": {
-    "global_budget_ms": 6000,
-    "processor_detection": { "enabled": true, "max_sites": 25, "fetch_timeout_ms": 3000, "check_checkout_page": true },
+    "global_budget_ms": 15000,
+    "processor_detection": { "enabled": true, "max_sites": 40, "fetch_timeout_ms": 3000, "check_checkout_page": true },
     "owner": { "enabled": true, "max_sites": 10, "fetch_timeout_ms": 3000 }
   }
 }

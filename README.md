@@ -137,6 +137,12 @@ scored 0–100 within that track:
 - **Greenfield:** recency (newer = higher, no contract lock-in), volume potential
   by vertical, and setup-gap signals.
 
+Service niches (dentists, med spas, HVAC, remodeling, pest control) use the
+`service` profile in `weights.displacement_profiles`. Those businesses mostly
+hold 4.7 stars and up, so a bad rating rarely fires; the profile shifts weight
+onto bundled software, customer financing, high-ticket work, and review volume.
+Restaurants, auto repair, and the other broad verticals use the base weights.
+
 Buckets: Hot ≥ 70, Warm 40–69, Cold < 40. Tune all weights in `config.json`.
 
 ## Notes / limitations

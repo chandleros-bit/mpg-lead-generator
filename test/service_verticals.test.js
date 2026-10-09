@@ -239,3 +239,50 @@ test("pest control pitches the recurring book, with bank draft in the discount",
   assert.ok(t.includes("every customer on a plan"));
   assert.ok(t.includes("bank draft"));
 });
+
+// ---------- 5. service scoring profile ----------
+
+test("a well-run service business with bundled software and financing reaches Hot", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const W = JSON.parse(await readFile(new URL("../config.json", import.meta.url), "utf8")).weights;
+  const icp = new Set(["hvac", "dentist", "restaurant"]);
+  const hvac = scoreBusiness(makeBusiness({
+    category: "hvac", rating: 4.8, review_count: 150, website: "https://x.com",
+    processor: ["ServiceTitan"], financing: ["GreenSky"], review_texts: ["great install of new system"],
+  }), W, icp);
+  assert.equal(hvac.bucket, "hot", `scored ${hvac.score}`);
+  const dentist = scoreBusiness(makeBusiness({
+    category: "dentist", rating: 4.9, review_count: 300, website: "https://x.com",
+    processor: ["Weave"], financing: ["CareCredit"], review_texts: ["implants"],
+  }), W, icp);
+  assert.equal(dentist.bucket, "hot", `scored ${dentist.score}`);
+});
+
+test("a service business with a good rating and nothing found on the site stays Cold", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const W = JSON.parse(await readFile(new URL("../config.json", import.meta.url), "utf8")).weights;
+  const lead = scoreBusiness(makeBusiness({
+    category: "hvac", rating: 4.8, review_count: 150, website: "https://x.com",
+  }), W, new Set(["hvac"]));
+  assert.equal(lead.bucket, "cold", `scored ${lead.score}`);
+});
+
+test("the service profile applies only to service packs", async () => {
+  const { displacementWeights } = await import("../lib/scoring.js");
+  const W = { displacement: { volume_max: 20, dissatisfaction_max: 35 },
+    displacement_profiles: { service: { volume_max: 25, dissatisfaction_max: 15 } } };
+  assert.equal(displacementWeights(W, "hvac").dissatisfaction_max, 15);
+  assert.equal(displacementWeights(W, "dentist").volume_max, 25);
+  assert.equal(displacementWeights(W, "restaurant").dissatisfaction_max, 35);
+  assert.equal(displacementWeights(W, "auto_repair").dissatisfaction_max, 35);
+  // No profiles configured: everything falls back to the base weights.
+  assert.equal(displacementWeights({ displacement: { volume_max: 20 } }, "hvac").volume_max, 20);
+});
+
+test("review volume points scale with review count up to the cap", async () => {
+  const { reviewVolumePoints } = await import("../lib/scoring.js");
+  assert.equal(reviewVolumePoints(0, 25, 150), 0);
+  assert.equal(reviewVolumePoints(75, 25, 150), 12);
+  assert.equal(reviewVolumePoints(150, 25, 150), 25);
+  assert.equal(reviewVolumePoints(900, 25, 150), 25);
+});
