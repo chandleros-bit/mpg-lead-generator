@@ -24,6 +24,7 @@
     ],
     "exclude_domains": ["loves.com"]
   },
+  "desk": { "conversation_goal": 40, "timezone": "America/Chicago" },
   "personal": {
     "name": "Chandler Atkinson",
     "company": "Media Payments Group",
