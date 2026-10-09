@@ -104,6 +104,27 @@ note, and every state is pitched as a cash discount. TABC new-license leads are
 pulled only for Texas runs of bars or restaurants, scoped to the market's
 county.
 
+## Call desk and saved leads
+
+Every live search is saved to a Supabase database, one row per Google listing,
+so a business is never added twice. A new run adds new businesses and refreshes
+the score and signals on ones already saved; it never changes their tab, call
+status, notes or callback.
+
+- **Sidebar:** Due today (callbacks), All leads, New this week, then one tab per vertical.
+- **Outcomes:** No answer and Left voicemail keep a lead on the call list.
+  Talked, Meeting set and Not a fit move it to Worked. Do not contact hides it for good.
+- **Conversations today:** Talked, Meeting set, Not a fit and Do not contact count
+  toward the daily goal (`desk.conversation_goal` in `config.json`, 40). The day
+  rolls over at midnight Central.
+- **Copy for tracker:** copies today's conversations as rows lined up with the
+  Visits tab of the MPG tracker (Visit date through Merchant boarded). Paste into
+  the first empty row.
+
+Setup: create a Supabase project, run `supabase/schema.sql` in its SQL editor,
+then set `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the service_role key) in
+Vercel and redeploy. Without them, searches still work but nothing is kept.
+
 ## Using the dashboard
 
 - **Score readout** (left of each card) is color-coded: red = Hot, amber = Warm,

@@ -2,6 +2,8 @@ import { loadConfig, cfgDict } from "../lib/config.js";
 import { fetchAllVerticals, loadDemoBusinesses } from "../lib/fetcher.js";
 import { geocodeAddress, geocodeMarket, looksLikeCoords } from "../lib/geocode.js";
 import { getVertical } from "../lib/verticals/index.js";
+import { dbConfig, rpc } from "../lib/db.js";
+import { leadToDbRow } from "../lib/desk.js";
 import { buildLeads, summarize } from "../lib/pipeline.js";
 import { fetchTabcNew } from "../lib/tabc.js";
 
@@ -57,9 +59,29 @@ const TABC_VERTICALS = new Set(["bar", "restaurant"]);
 // searching the wrong niche looks exactly like an empty market.
 export function resolveVerticals(param, cfgVerticals) {
   const v = String(param || "").trim();
-  if (!v || v === "default") return { verticals: cfgVerticals };
+  if (!v || v === "default") return { verticals: cfgVerticals, single: false };
   if (!getVertical(v)) return { error: `Unknown vertical "${v}".` };
-  return { verticals: [v] };
+  return { verticals: [v], single: true };
+}
+
+export async function saveRun(db, rows, runInfo, market, fetchImpl = fetch) {
+  if (!db) return { saved: false, configured: false };
+  if (!rows.length) return { saved: true, configured: true, new_count: 0, existing_count: 0 };
+  try {
+    const out = await rpc(db, "save_run", {
+      p_run: runInfo,
+      p_leads: rows.map((r) => leadToDbRow(r, runInfo.vertical, market)),
+    }, { fetchImpl });
+    const byPlace = new Map((out.leads || []).map((l) => [l.place_id, l]));
+    for (const r of rows) {
+      const s = byPlace.get(r.place_id);
+      if (s) { r.lead_id = s.id; r.is_new = s.is_new; r.status = s.status; }
+    }
+    return { saved: true, configured: true, run_id: out.run_id,
+      new_count: out.new_count, existing_count: out.existing_count };
+  } catch (e) {
+    return { saved: false, configured: true, error: e.message };
+  }
 }
 
 export async function GET(req) {
@@ -147,8 +169,20 @@ export async function GET(req) {
   run.search = { ...run.search, verticals };
   run.market = market;
   const { rows, chainsFiltered, closedFiltered } = await buildLeads(run, businesses, deps);
+
+  // Save the run. New businesses are added; ones already saved are refreshed
+  // but keep their tab, call status and notes (see save_run in
+  // supabase/schema.sql). A database failure never costs the run: the leads
+  // still come back, with saving reported as failed.
+  const save = await saveRun(demo ? null : dbConfig(), rows, {
+    vertical: picked.single ? verticals[0] : "mixed",
+    city: market && market.city, state: market && market.state,
+    miles: Number(url.searchParams.get("miles")) || null,
+  }, market);
+
   return json({
     leads: rows,
+    save,
     summary: { ...summarize(rows), chainsFiltered, closedFiltered },
     demo,
     threshold: cfg.search.score_threshold ?? 40,
