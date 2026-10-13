@@ -120,7 +120,7 @@ test("detection reads vendor domains and avoids look-alikes", () => {
     <a href="https://www.carecredit.com/apply">Finance</a>`;
   const found = detectProcessors(html);
   assert.ok(found.includes("Vagaro"));
-  assert.deepEqual(splitDetections(found), { processors: ["Vagaro"], financing: ["CareCredit"] });
+  assert.deepEqual(splitDetections(found), { processors: ["Vagaro"], financing: ["CareCredit"], recurring: [] });
   assert.ok(!detectProcessors(`<a href="https://sunsetblvd.com/">x</a>`).includes("Boulevard"));
   assert.ok(detectProcessors(`<iframe src="https://blvd.co/glow/book">`).includes("Boulevard"));
 });
@@ -274,7 +274,11 @@ test("the service profile applies only to service packs", async () => {
   assert.equal(displacementWeights(W, "hvac").dissatisfaction_max, 15);
   assert.equal(displacementWeights(W, "dentist").volume_max, 25);
   assert.equal(displacementWeights(W, "restaurant").dissatisfaction_max, 35);
-  assert.equal(displacementWeights(W, "auto_repair").dissatisfaction_max, 35);
+  // Auto repair moved onto the service profile, with its own specialty weight on top.
+  assert.equal(displacementWeights(W, "auto_repair").dissatisfaction_max, 15);
+  assert.equal(displacementWeights(W, "auto_repair").specialty_points, 6);
+  assert.equal(displacementWeights(W, "remodeling").volume_full_at, 50);
+  assert.equal(displacementWeights(W, "hvac").specialty_points, undefined);
   // No profiles configured: everything falls back to the base weights.
   assert.equal(displacementWeights({ displacement: { volume_max: 20 } }, "hvac").volume_max, 20);
 });
@@ -285,4 +289,50 @@ test("review volume points scale with review count up to the cap", async () => {
   assert.equal(reviewVolumePoints(75, 25, 150), 12);
   assert.equal(reviewVolumePoints(150, 25, 150), 25);
   assert.equal(reviewVolumePoints(900, 25, 150), 25);
+});
+
+
+// ---------- 6. the three niches that could not reach Hot ----------
+
+async function liveWeights() {
+  const { readFile } = await import("node:fs/promises");
+  return JSON.parse(await readFile(new URL("../config.json", import.meta.url), "utf8")).weights;
+}
+const ALL = new Set(["auto_repair", "pest_control", "remodeling", "hvac"]);
+
+test("a strong, well-rated auto shop reaches Hot without bad reviews", async () => {
+  const W = await liveWeights();
+  const shop = scoreBusiness(makeBusiness({ category: "auto_repair", rating: 4.7, review_count: 250, website: "https://x.com",
+    processor: ["Tekmetric"], review_texts: ["they rebuilt the transmission on my diesel"] }), W, ALL);
+  assert.equal(shop.bucket, "hot", `scored ${shop.score}`);
+  const plain = scoreBusiness(makeBusiness({ category: "auto_repair", rating: 4.7, review_count: 250, website: "https://x.com" }), W, ALL);
+  assert.equal(plain.bucket, "cold", `scored ${plain.score}`);
+});
+
+test("pest control: recurring billing on the site works the way financing does", async () => {
+  const W = await liveWeights();
+  const pest = scoreBusiness(makeBusiness({ category: "pest_control", rating: 4.8, review_count: 200, website: "https://x.com",
+    processor: ["FieldRoutes"], recurring: ["Autopay", "Customer portal"], review_texts: ["termite treatment"] }), W, ALL);
+  assert.equal(pest.bucket, "hot", `scored ${pest.score}`);
+  assert.ok(pest.why.some((w) => w === "bills customers online (Autopay, Customer portal)"));
+  // Only niches that declare recurring billing score it.
+  const hvac = scoreBusiness(makeBusiness({ category: "hvac", rating: 4.8, review_count: 150, website: "https://x.com",
+    recurring: ["Autopay"] }), W, ALL);
+  assert.ok(!hvac.why.some((w) => w.startsWith("bills customers online")));
+});
+
+test("recurring billing pages are detected and kept out of the processor list", () => {
+  const html = `<a href="/pay-my-bill">Pay my bill</a> Sign up for autopay`;
+  const found = detectProcessors(html);
+  const split = splitDetections(found);
+  assert.deepEqual(split.recurring.sort(), ["Autopay", "Online bill pay"]);
+  assert.deepEqual(split.processors, []);
+  assert.equal(tierOf("Autopay"), "recurring");
+});
+
+test("remodeling: full size points at 50 reviews, so a busy remodeler can reach Hot", async () => {
+  const W = await liveWeights();
+  const r = scoreBusiness(makeBusiness({ category: "remodeling", rating: 4.9, review_count: 45, website: "https://x.com",
+    processor: ["Buildertrend"], financing: ["Hearth"], review_texts: ["custom cabinets and quartz countertops"] }), W, ALL);
+  assert.equal(r.bucket, "hot", `scored ${r.score}`);
 });
