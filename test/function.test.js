@@ -315,3 +315,67 @@ test("the market city reaches the campaign copy", async () => {
     globalThis.fetch = orig;
   }
 });
+
+// A TABC row carries a county and no coordinates, so it cannot be narrowed to
+// a circle. Left on, a one-mile coordinate search still pulled every
+// on-premise licence issued in the configured counties over the last 120 days
+// — 116 restaurants across Harris and Fort Bend, every one of them scoring an
+// identical 78 (no reviews, no price level, no website, so the greenfield
+// inputs are the same for all of them) and sorting above the real Places
+// results. The source only makes sense at the scale it is scoped to.
+test("a coordinate run skips TABC — a county feed cannot be narrowed to a circle", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?location=29.9691,-95.6972&miles=1&vertical=restaurant",
+      { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 200);
+    assert.ok(!urls.some((u) => u.includes("data.texas.gov")),
+      "a point search must not pull county-wide licence rows");
+  } finally { globalThis.fetch = orig; }
+});
+
+test("a typed address run also skips TABC, having resolved no county", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url) => {
+    urls.push(String(url));
+    if (String(url).includes("maps/api/geocode")) {
+      return new Response(JSON.stringify({ status: "OK", results: [{ geometry: { location: { lat: 30, lng: -95 } } }] }), { status: 200 });
+    }
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    const res = await handler(new Request("http://x/api/leads?location=77433&vertical=restaurant",
+      { headers: { "x-app-passphrase": "right" } }));
+    assert.equal(res.status, 200);
+    assert.ok(!urls.some((u) => u.includes("data.texas.gov")));
+  } finally { globalThis.fetch = orig; }
+});
+
+// The city path is the one scale TABC fits, and it must keep working.
+test("a city run still pulls TABC for its county", async () => {
+  process.env.APP_PASSPHRASE = "right";
+  process.env.GOOGLE_PLACES_API_KEY = "key";
+  const orig = globalThis.fetch;
+  const urls = [];
+  globalThis.fetch = async (url, opts) => {
+    urls.push(String(url));
+    if (isMarketCall(opts)) return new Response(JSON.stringify(geocodeHit()), { status: 200 });
+    if (String(url).includes("data.texas.gov")) return new Response("[]", { status: 200 });
+    return new Response(JSON.stringify(DEMO_RAW), { status: 200 });
+  };
+  try {
+    await handler(new Request("http://x/api/leads?city=Dallas&state=TX&vertical=restaurant",
+      { headers: { "x-app-passphrase": "right" } }));
+    assert.ok(urls.some((u) => u.includes("data.texas.gov")));
+  } finally { globalThis.fetch = orig; }
+});

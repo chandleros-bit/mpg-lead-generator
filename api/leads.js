@@ -131,6 +131,16 @@ export async function GET(req) {
         // pull Harris County licenses.
         tabcCounties = m.county ? [m.county] : [];
       } else if (rawLoc) {
+        // A point run, and TABC cannot follow it there. Its rows carry a
+        // county and no coordinates, so nothing can narrow them to this
+        // circle: a one-mile search was returning every on-premise licence
+        // issued in the configured counties over the last 120 days. Those rows
+        // also score identically — no reviews, no price level, no website
+        // leaves the greenfield inputs the same for all of them — so they
+        // arrive as a block of equal Hot scores above the real results. The
+        // source belongs to the scale it is scoped to; the city path, which
+        // resolves a county, keeps it.
+        tabcCounties = [];
         if (looksLikeCoords(rawLoc)) {
           location = rawLoc;
         } else {
