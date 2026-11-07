@@ -5,6 +5,7 @@
 // leads and any outcomes live in this page only and vanish on reload. The
 // banner says which one you are in.
 import { buildResearchLinks } from "./research.js";
+import { searchParams } from "./search-target.js";
 import { leadsToCsv } from "./csv.js";
 import { readResponse, errorMessage } from "./response.js";
 import { openStatus } from "./hours.js";
@@ -422,12 +423,11 @@ import {
     var st = el.stateInput.value;
     var miles = el.milesInput.value.trim();
     store(KEYS.city, city); store(KEYS.state, st); if (miles) store(KEYS.miles, miles);
-    var qs = ["vertical=" + encodeURIComponent(state.tab)];
-    if (DEMO) qs = ["demo=1"];
-    else {
-      if (city) { qs.push("city=" + encodeURIComponent(city)); qs.push("state=" + encodeURIComponent(st)); }
-      if (miles) qs.push("miles=" + encodeURIComponent(miles));
-    }
+    // The place box takes a city, a ZIP, or a pasted "lat,lng" pair; which of
+    // those it is decides whether the run targets a market or an exact point.
+    var qs = DEMO
+      ? ["demo=1"]
+      : searchParams({ vertical: state.tab, place: city, state: st, miles: miles });
     state.busy = true;
     el.runBtn.disabled = true;
     el.runBtn.textContent = "Searching…";
