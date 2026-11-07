@@ -383,9 +383,15 @@ import {
     var v = isVerticalTab(state.tab) ? state.tab : "all";
     el.rows.innerHTML = '<div class="state">Loading…</div>';
     return api("/api/desk?vertical=" + encodeURIComponent(v)).then(function (res) {
-      if (res.status === 503 && res.parsed && res.data.configured === false) {
+      // Two ways the desk runs without a database, and they send the user to
+      // different places: no credentials set, or credentials set and the
+      // database not answering (a paused Supabase project). Both keep the
+      // tool usable; only the wording differs.
+      if (res.status === 503 && res.parsed && (res.data.configured === false || res.data.reachable === false)) {
         state.mode = "local";
-        banner("<strong>Saving is not set up yet.</strong> Searches still work, but leads and call outcomes on this page are lost when you reload.", "");
+        banner(res.data.reachable === false
+          ? "<strong>The database is not responding.</strong> It may be paused — check your Supabase project. Searches still work, but leads and call outcomes on this page are lost when you reload."
+          : "<strong>Saving is not set up yet.</strong> Searches still work, but leads and call outcomes on this page are lost when you reload.", "");
         render();
         return;
       }

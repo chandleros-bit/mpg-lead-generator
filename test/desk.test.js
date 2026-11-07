@@ -6,7 +6,7 @@ import {
   OUTCOMES, dayIn, leadPatchForOutcome, conversationCounts, sidebarCounts,
   visitsRow, visitsTsv, excelDate, leadToDbRow,
 } from "../lib/desk.js";
-import { dbConfig, selectAll } from "../lib/db.js";
+import { dbConfig, selectAll, select, DbError, DbUnreachable } from "../lib/db.js";
 import * as desk from "../api/desk.js";
 import * as leadsApi from "../api/leads.js";
 
@@ -305,3 +305,61 @@ test("the desk module keeps Vercel's named-export shape", () => {
   assert.equal(typeof desk.POST, "function");
   assert.equal(desk.default, undefined);
 });
+
+// ---------- a configured database that is not answering ----------
+//
+// Supabase pauses a free project after about a week idle. The host then stops
+// answering, Node's fetch throws TypeError("fetch failed"), and that message
+// used to come back as a bare 502 {"error":"fetch failed"} — which the
+// dashboard renders as "Could not load leads." and blames the lead search for
+// a database outage. Missing credentials already degrade to local mode; an
+// unreachable database is the same practical situation and must degrade too.
+
+test("db: a transport failure becomes a typed unreachable error", async () => {
+  const fetchImpl = async () => { throw new TypeError("fetch failed"); };
+  await assert.rejects(
+    () => select({ url: "https://x.co", key: "k" }, "leads", "select=id", { fetchImpl }),
+    (e) => e instanceof DbUnreachable && !(e instanceof DbError),
+  );
+});
+
+test("db: an HTTP error from the database stays a DbError", async () => {
+  const fetchImpl = async () => new Response(JSON.stringify({ message: "permission denied" }), { status: 403 });
+  await assert.rejects(
+    () => select({ url: "https://x.co", key: "k" }, "leads", "select=id", { fetchImpl }),
+    (e) => e instanceof DbError && e.status === 403 && !(e instanceof DbUnreachable),
+  );
+});
+
+test("desk API: an unreachable database degrades to local mode, not a 502", withEnv(async () => {
+  globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
+  const res = await desk.GET(new Request("http://x/api/desk?vertical=hvac", { headers: H }));
+  assert.equal(res.status, 503);
+  const d = await res.json();
+  // configured stays true: the credentials are set, so "not set up yet" would
+  // send the user to the wrong place entirely.
+  assert.equal(d.configured, true);
+  assert.equal(d.reachable, false);
+  assert.match(d.error, /not responding/i);
+}));
+
+test("desk API: saving against an unreachable database degrades the same way", withEnv(async () => {
+  globalThis.fetch = async () => { throw new TypeError("fetch failed"); };
+  const res = await desk.POST(new Request("http://x/api/desk", {
+    method: "POST", headers: H,
+    body: JSON.stringify({ lead_id: 1, action: "outcome", outcome: "talked" }),
+  }));
+  assert.equal(res.status, 503);
+  const d = await res.json();
+  assert.equal(d.reachable, false);
+}));
+
+// Only a connect failure degrades. A database that answers with an error is a
+// real fault and must stay loud, or a broken query silently becomes "saving is
+// off" and the user loses work without being told why.
+test("desk API: a database that answers with an error is still a 502", withEnv(async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: "permission denied for table leads" }), { status: 403 });
+  const res = await desk.GET(new Request("http://x/api/desk?vertical=hvac", { headers: H }));
+  assert.equal(res.status, 502);
+  assert.match((await res.json()).error, /permission denied/);
+}));

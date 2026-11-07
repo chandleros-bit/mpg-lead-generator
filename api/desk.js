@@ -4,7 +4,7 @@
 // Named GET/POST exports, never a default export: see the long note in
 // api/leads.js on how Vercel picks the calling convention.
 import { loadConfig } from "../lib/config.js";
-import { dbConfig, select, selectAll, insert, update } from "../lib/db.js";
+import { dbConfig, select, selectAll, insert, update, DbUnreachable } from "../lib/db.js";
 import {
   DEFAULT_GOAL, DEFAULT_TIMEZONE, OUTCOMES, isOutcome, isIsoDate, dayIn,
   leadPatchForOutcome, conversationCounts, sidebarCounts, visitsTsv,
@@ -24,6 +24,20 @@ const LIST_COLUMNS = [
   "market_city", "market_state", "status", "last_outcome", "last_touch_at",
   "callback_on", "notes", "first_seen_at", "first_run_id", "last_run_id",
 ].join(",");
+
+// A configured database that is not answering degrades to the same local mode
+// as one that was never configured: searches still work, nothing persists. The
+// shape differs so the dashboard can say which it is — "not set up yet" would
+// send the user to their environment variables when the real answer is a
+// paused project. Anything else is a genuine fault and keeps its 502.
+function dbFailure(e) {
+  if (!(e instanceof DbUnreachable)) return null;
+  return json({
+    configured: true,
+    reachable: false,
+    error: "The database is not responding. It may be paused.",
+  }, 503);
+}
 
 function context(req) {
   const cfg = loadConfig();
@@ -100,7 +114,7 @@ export async function GET(req) {
     }
     return json(out);
   } catch (e) {
-    return json({ error: e.message }, 502);
+    return dbFailure(e) ?? json({ error: e.message }, 502);
   }
 }
 
@@ -150,6 +164,6 @@ export async function POST(req) {
 
     return json({ error: "Unknown action." }, 400);
   } catch (e) {
-    return json({ error: e.message }, 502);
+    return dbFailure(e) ?? json({ error: e.message }, 502);
   }
 }
