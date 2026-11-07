@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import {
   classifyTrack, dissatisfactionPoints, keywordPainPoints, techPoints,
   volumePoints, recencyPoints, volumePotentialPoints, setupGapPoints, scoreBusiness,
-  websiteStatus,
+  websiteStatus, licenceRecencyPoints, licenceAgeDays,
 } from "../lib/scoring.js";
 import { ICP, WEIGHTS, makeBusiness } from "./helpers.js";
 import { processorPoints } from "../lib/scoring.js";
+
+const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
 
 // ---------- classification ----------
 test("out of ICP is low_fit", () => {
@@ -117,7 +119,7 @@ test("a TABC row's null website is an artifact, not a signal", () => {
   // setup gap for a field nothing ever populated.
   const tabc = makeBusiness({
     category: "bar", review_count: 0, website: null, source: "tabc",
-    business_status: "OPERATIONAL", licensed_on: "2026-07-01", review_texts: [],
+    business_status: "OPERATIONAL", licensed_on: daysAgo(0), review_texts: [],
   });
   const lead = scoreBusiness(tabc, WEIGHTS, ICP);
   assert.equal(lead.track, "greenfield");
@@ -405,4 +407,76 @@ test("a TABC bar and a Places bar are no longer indistinguishable", () => {
   const places = scoreBusiness(makeBusiness({ category: "bar", source: "places", review_count: 0 }), WEIGHTS, ICP);
   assert.notDeepEqual(tabc.why, places.why);
   assert.notEqual(tabc.confidence, places.confidence);
+});
+
+// ---------- greenfield recency from the licence date ----------
+//
+// review_count is the recency proxy everywhere else, and for a Places business
+// it is a fair one: few reviews means new. A TABC row has no reviews at all,
+// so that proxy paid every licence the full weight regardless of age — a
+// permit issued this week and one issued four months ago both scored the
+// maximum, and every TABC row in a run collapsed onto the same number. A live
+// query returned 116 restaurants, all 78.
+
+test("a licence issued today pays the full recency weight", () => {
+  assert.equal(licenceRecencyPoints(daysAgo(0), 40), 40);
+});
+
+test("a licence at the edge of the window pays the floor, not zero", () => {
+  // Everything the feed returns is a new business; the oldest is still
+  // greenfield, just less urgent than this morning's.
+  assert.equal(licenceRecencyPoints(daysAgo(120), 40), 16);
+  assert.equal(licenceRecencyPoints(daysAgo(400), 40), 16, "past the window it holds at the floor");
+});
+
+test("recency falls off across the window", () => {
+  const fresh = licenceRecencyPoints(daysAgo(7), 40);
+  const mid = licenceRecencyPoints(daysAgo(60), 40);
+  const old = licenceRecencyPoints(daysAgo(115), 40);
+  assert.ok(fresh > mid && mid > old, `${fresh} > ${mid} > ${old}`);
+  assert.ok(fresh <= 40 && old >= 16);
+});
+
+test("a date that cannot be read returns null so the caller can fall back", () => {
+  assert.equal(licenceRecencyPoints("", 40), null);
+  assert.equal(licenceRecencyPoints(null, 40), null);
+  assert.equal(licenceRecencyPoints("recently", 40), null);
+});
+
+test("a future-dated licence is capped at the full weight", () => {
+  assert.equal(licenceRecencyPoints(daysAgo(-30), 40), 40);
+});
+
+// ---------- the effect on scored leads ----------
+
+test("two TABC licences of different ages no longer score the same", () => {
+  const mk = (licensed_on) => makeBusiness({
+    category: "restaurant", review_count: 0, website: null,
+    source: "tabc", licensed_on,
+  });
+  const fresh = scoreBusiness(mk(daysAgo(3)), WEIGHTS, ICP);
+  const stale = scoreBusiness(mk(daysAgo(110)), WEIGHTS, ICP);
+  assert.equal(fresh.track, "greenfield");
+  assert.equal(stale.track, "greenfield");
+  assert.ok(fresh.score > stale.score, `fresh ${fresh.score} should beat stale ${stale.score}`);
+});
+
+test("the licence date is named in the why text, with its age", () => {
+  const b = makeBusiness({ category: "restaurant", review_count: 0, source: "tabc", licensed_on: daysAgo(9) });
+  const chip = scoreBusiness(b, WEIGHTS, ICP).why.find((w) => w.includes("TABC"));
+  assert.match(chip, /9 days ago/);
+});
+
+// A Places greenfield row has no licence date and must score exactly as it did
+// before: its recency still comes from the review count.
+test("a Places greenfield lead is untouched by the licence rule", () => {
+  const b = makeBusiness({ category: "restaurant", review_count: 3, website: null, source: "places" });
+  const lead = scoreBusiness(b, WEIGHTS, ICP);
+  const w = WEIGHTS.greenfield;
+  const expected =
+    recencyPoints(3, WEIGHTS.greenfield_review_cutoff, w.recency_max) +
+    volumePotentialPoints("restaurant", null, w.volume_potential_max) +
+    setupGapPoints(null, [], w.setup_gap_max, WEIGHTS.website_unknown) +
+    w.icp_tiebreak;
+  assert.equal(lead.score, expected);
 });
