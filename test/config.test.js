@@ -89,3 +89,31 @@ test("public/config.json never contradicts config.json", () => {
   }
   assert.deepEqual(mismatches, [], `public/config.json drifted from config.json:\n${mismatches.join("\n")}`);
 });
+
+// ---------- env secrets are trimmed ----------
+//
+// Pasting a secret into a hosting dashboard is how these values get set, and a
+// paste carries a trailing newline or space often enough to matter. Untrimmed,
+// `provided !== cfg.passphrase` in api/leads.js can never match what the user
+// types, so every live request 401s with "Invalid or missing passphrase" while
+// the value looks correct in the dashboard. lib/db.js already trims its two.
+
+test("a passphrase with surrounding whitespace still matches what the user types", () => {
+  process.env.APP_PASSPHRASE = " open-sesame\n";
+  assert.equal(loadConfig().passphrase, "open-sesame");
+});
+
+test("an API key with surrounding whitespace is trimmed", () => {
+  process.env.GOOGLE_PLACES_API_KEY = "  AIza-test  ";
+  assert.equal(loadConfig().apiKey, "AIza-test");
+});
+
+// Whitespace-only is nobody's passphrase. Left as-is it is truthy, so the
+// handler would skip the "not configured" branch and compare against spaces.
+test("a whitespace-only secret reads as unset, not as a secret made of spaces", () => {
+  process.env.APP_PASSPHRASE = "   ";
+  process.env.GOOGLE_PLACES_API_KEY = "\t\n";
+  const cfg = loadConfig();
+  assert.equal(cfg.passphrase, null);
+  assert.equal(cfg.apiKey, null);
+});
