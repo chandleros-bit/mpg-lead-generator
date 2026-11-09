@@ -48,14 +48,24 @@ create table if not exists leads (
   last_touch_at   timestamptz,
   callback_on     date,
   notes           text not null default '',
+  -- The day this lead was placed on the Today list. Membership only: the
+  -- order is recomputed on read. Yesterday's value is simply not today's, so
+  -- the list rolls over on its own and nothing has to clean up after it.
+  today_on        date,
   first_seen_at   timestamptz not null default now(),
   last_seen_at    timestamptz not null default now(),
   first_run_id    bigint references runs(id) on delete set null,
   last_run_id     bigint references runs(id) on delete set null
 );
 
+-- `create table if not exists` above does nothing to a table that already
+-- exists, so a column added after the first release needs saying twice: once
+-- in the table for a fresh install, once here for an existing one.
+alter table leads add column if not exists today_on date;
+
 create index if not exists leads_vertical_idx on leads (vertical, status);
 create index if not exists leads_callback_idx on leads (callback_on) where callback_on is not null;
+create index if not exists leads_today_idx on leads (today_on) where today_on is not null;
 
 create table if not exists calls (
   id             bigserial primary key,

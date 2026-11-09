@@ -111,7 +111,16 @@ so a business is never added twice. A new run adds new businesses and refreshes
 the score and signals on ones already saved; it never changes their tab, call
 status, notes or callback.
 
-- **Sidebar:** Due today (callbacks), All leads, New this week, then one tab per vertical.
+- **Sidebar:** Today, All leads, New this week, then one tab per vertical.
+- **Today** is the morning list and the tab the desk opens on: every callback
+  due, then the best leads you have not called yet — Hot, then Warm, then new
+  this week — filling up to the daily conversation goal. Callbacks are never
+  cut; a heavy callback day runs past the goal rather than hiding one.
+  The list is composed once a day and then frozen, so working a lead strikes
+  it through in place instead of reshuffling the sheet under you. It composes
+  on the first request of the day, whichever tab you land on, and rolls over
+  by itself at midnight Central. There is no filter row on it: a composed list
+  crossed with a filter is neither.
 - **Outcomes:** No answer and Left voicemail keep a lead on the call list.
   Talked, Meeting set and Not a fit move it to Worked. Do not contact hides it for good.
 - **Conversations today:** Talked, Meeting set, Not a fit and Do not contact count
@@ -124,6 +133,11 @@ status, notes or callback.
 Setup: create a Supabase project, run `supabase/schema.sql` in its SQL editor,
 then set `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (the service_role key) in
 Vercel and redeploy. Without them, searches still work but nothing is kept.
+
+Re-run `supabase/schema.sql` after pulling a change that touches it — every
+statement in it checks before it creates, so running it again is safe and is
+how an existing database picks up a new column. The Today tab needs the
+`leads.today_on` column it adds; without it the tab comes back empty.
 
 ## Using the dashboard
 
@@ -138,8 +152,9 @@ Vercel and redeploy. Without them, searches still work but nothing is kept.
   Email 2, SMS, Voicemail). Each has a **Copy** button. The angle is chosen
   automatically by track — Displacement leads never get "switch," Greenfield
   leads never get told to switch from a processor they don't have.
-- Filter by Hot / Warm / Displacement / Greenfield, search by name, sort by
-  score or name.
+- On a vertical's tab, filter by To call / Hot / Warm / New / Worked, narrow
+  to businesses open right now, and search by name, address or note. Today and
+  the other composed tabs carry their own order and take no filter.
 
 ## Tests
 
@@ -247,6 +262,8 @@ public/
   index.html                 UI shell
   dashboard.css              styles
   dashboard.js               client rendering, filter/sort/copy
+  today.js                   the Today list: what it holds and in what order
+  desk-view.js               pure view logic: which leads a tab shows, how a row reads
   research.js                "who to ask for" deep links
   csv.js                     leads → CSV export
   config.json                display-only mirror of config.json

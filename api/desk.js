@@ -10,6 +10,10 @@ import {
   leadPatchForOutcome, conversationCounts, sidebarCounts, visitsTsv,
 } from "../lib/desk.js";
 import { getVertical } from "../lib/verticals/index.js";
+// The Today rules live in public/ because the browser is served them; see the
+// header of that file. Importing them here is what keeps the list the server
+// stamps and the list the browser draws the same list.
+import { selectToday } from "../public/today.js";
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
@@ -22,7 +26,7 @@ const LIST_COLUMNS = [
   "review_count", "score", "bucket", "track", "confidence", "why", "signals",
   "processor", "financing", "owner", "decision_makers", "hours", "source",
   "market_city", "market_state", "status", "last_outcome", "last_touch_at",
-  "callback_on", "notes", "first_seen_at", "first_run_id", "last_run_id",
+  "callback_on", "notes", "today_on", "first_seen_at", "first_run_id", "last_run_id",
 ].join(",");
 
 // A configured database that is not answering degrades to the same local mode
@@ -52,11 +56,34 @@ function context(req) {
   return { db, tz, goal, today: dayIn(tz) };
 }
 
+// Everything sidebarCounts needs, plus everything selectToday needs. One read
+// serves both, so composing the day costs no extra round trip.
+const LIGHT_COLUMNS =
+  "id,vertical,status,bucket,score,callback_on,last_outcome,today_on,first_seen_at";
+
+// Make sure today's list exists, and return the light rows with the stamp
+// applied. Composing is lazy but unconditional: the first desk request of any
+// day builds the list, whichever tab asked, so the count in the sidebar is
+// right before the tab is ever opened. Once stamped it is never recomposed —
+// that is what freezes the list for the day.
+export async function ensureToday(db, today, goal, light) {
+  if (light.some((l) => l.today_on === today)) return light;
+  const picked = selectToday(light, { today, goal });
+  if (!picked.length) return light;
+  const ids = picked.map((l) => l.id).filter((id) => id != null);
+  if (!ids.length) return light;
+  // select=id keeps PostgREST from echoing forty whole rows we already hold.
+  await update(db, "leads", `id=in.(${ids.join(",")})&select=id`, { today_on: today });
+  const chosen = new Set(ids);
+  return light.map((l) => (chosen.has(l.id) ? { ...l, today_on: today } : l));
+}
+
 async function summary(db, today, goal) {
-  const [light, calls] = await Promise.all([
-    selectAll(db, "leads", "select=vertical,status,callback_on,first_seen_at&order=id.asc"),
+  const [rows, calls] = await Promise.all([
+    selectAll(db, "leads", `select=${LIGHT_COLUMNS}&order=id.asc`),
     select(db, "calls", `select=outcome&call_date=eq.${today}`),
   ]);
+  const light = await ensureToday(db, today, goal, rows);
   return {
     configured: true,
     today,
@@ -100,14 +127,21 @@ export async function GET(req) {
 
     const out = await summary(db, today, goal);
 
-    // A tab's saved leads. "all" spans every vertical.
+    // A tab's saved leads. "all" spans every vertical; "today" is the day's
+    // composed sheet, which summary() has already made sure exists. The
+    // browser orders and sections it — the stamp records membership only.
     const vertical = url.searchParams.get("vertical");
     if (vertical) {
-      if (vertical !== "all" && !getVertical(vertical)) return json({ error: `Unknown vertical "${vertical}".` }, 400);
-      const filter = vertical === "all" ? "" : `&vertical=eq.${vertical}`;
+      const isToday = vertical === "today";
+      if (!isToday && vertical !== "all" && !getVertical(vertical)) {
+        return json({ error: `Unknown vertical "${vertical}".` }, 400);
+      }
+      const filter = isToday ? `&today_on=eq.${today}` : vertical === "all" ? "" : `&vertical=eq.${vertical}`;
       out.leads = await selectAll(db, "leads",
         `select=${LIST_COLUMNS}&status=neq.dnc${filter}&order=score.desc,id.asc`);
-      if (vertical !== "all") {
+      // "Last run" belongs to a vertical's own search. The composed tabs span
+      // every vertical, so there is no single run behind them.
+      if (!isToday && vertical !== "all") {
         const [last] = await select(db, "runs", `select=*&vertical=eq.${vertical}&order=id.desc&limit=1`);
         out.last_run = last || null;
       }

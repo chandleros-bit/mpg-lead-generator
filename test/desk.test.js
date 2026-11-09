@@ -47,16 +47,16 @@ test("the day rolls over at midnight Central, not UTC", () => {
   assert.equal(dayIn("America/Chicago", new Date("2026-10-09T05:30:00Z")), "2026-10-09");
 });
 
-test("sidebar counts skip do-not-contact and find due and new leads", () => {
+test("sidebar counts skip do-not-contact and find due, today and new leads", () => {
   const now = new Date("2026-10-08T15:00:00Z");
   const counts = sidebarCounts([
-    { vertical: "hvac", status: "to_call", callback_on: null, first_seen_at: "2026-10-08T02:00:00Z" },
-    { vertical: "hvac", status: "worked", callback_on: "2026-10-08", first_seen_at: "2026-09-01T00:00:00Z" },
-    { vertical: "hvac", status: "to_call", callback_on: "2026-10-01", first_seen_at: "2026-09-01T00:00:00Z" },
-    { vertical: "dentist", status: "to_call", callback_on: "2026-10-20", first_seen_at: "2026-10-05T00:00:00Z" },
-    { vertical: "hvac", status: "dnc", callback_on: "2026-10-08", first_seen_at: "2026-10-08T00:00:00Z" },
+    { vertical: "hvac", status: "to_call", callback_on: null, today_on: "2026-10-08", first_seen_at: "2026-10-08T02:00:00Z" },
+    { vertical: "hvac", status: "worked", callback_on: "2026-10-08", today_on: "2026-10-08", first_seen_at: "2026-09-01T00:00:00Z" },
+    { vertical: "hvac", status: "to_call", callback_on: "2026-10-01", today_on: "2026-10-07", first_seen_at: "2026-09-01T00:00:00Z" },
+    { vertical: "dentist", status: "to_call", callback_on: "2026-10-20", today_on: null, first_seen_at: "2026-10-05T00:00:00Z" },
+    { vertical: "hvac", status: "dnc", callback_on: "2026-10-08", today_on: "2026-10-08", first_seen_at: "2026-10-08T00:00:00Z" },
   ], "2026-10-08", now);
-  assert.deepEqual(counts, { all: 4, due: 2, new_week: 2, verticals: { hvac: 3, dentist: 1 } });
+  assert.deepEqual(counts, { all: 4, due: 2, today: 2, new_week: 2, verticals: { hvac: 3, dentist: 1 } });
 });
 
 test("a tracker row lines up with the Visits tab, A through M", () => {
@@ -163,10 +163,12 @@ test("desk API: passphrase first, then a clear not-set-up answer", withEnv(async
 
 test("desk API: a tab returns its saved leads, counts, and conversations today", withEnv(async () => {
   const { log, fetchImpl } = fakeSupabase([
-    { method: "GET", path: "leads", match: (e) => e.query.includes("select=vertical"), reply: [
-      { vertical: "hvac", status: "to_call", callback_on: null, first_seen_at: new Date().toISOString() },
+    // The light read for the counts: the only leads query ordered by id alone.
+    { method: "GET", path: "leads", match: (e) => e.query.includes("order=id.asc"), reply: [
+      { id: 1, vertical: "hvac", status: "to_call", bucket: "hot", score: 80, callback_on: null,
+        last_outcome: null, today_on: "1999-01-01", first_seen_at: new Date().toISOString() },
     ] },
-    { method: "GET", path: "leads", match: (e) => e.query.includes("select=id"), reply: [{ id: 1, name: "Arctic Air", vertical: "hvac" }] },
+    { method: "GET", path: "leads", match: (e) => e.query.includes("status=neq.dnc"), reply: [{ id: 1, name: "Arctic Air", vertical: "hvac" }] },
     { method: "GET", path: "calls", reply: [{ outcome: "talked" }, { outcome: "voicemail" }] },
     { method: "GET", path: "runs", reply: [{ id: 9, vertical: "hvac", new_count: 14 }] },
   ]);
@@ -179,11 +181,72 @@ test("desk API: a tab returns its saved leads, counts, and conversations today",
   assert.equal(d.conversations.total, 1);
   assert.equal(d.counts.verticals.hvac, 1);
   assert.equal(d.last_run.new_count, 14);
-  const list = log.find((e) => e.path === "leads" && e.query.includes("select=id"));
+  const list = log.find((e) => e.path === "leads" && e.query.includes("score.desc"));
   assert.ok(decodeURIComponent(list.query).includes("status=neq.dnc"), "do-not-contact never comes back");
   assert.ok(list.query.includes("vertical=eq.hvac"));
   assert.ok(!list.query.includes("campaign"), "copy is fetched per lead, not in the list");
   assert.equal(list.headers.Authorization, "Bearer service");
+}));
+
+// Today's list: composed on the first desk request of the day, whichever tab
+// asked, then frozen. These cover the stamping, not the picking — the rules
+// themselves are test/today.test.js.
+function todayFixture(lightRows) {
+  return fakeSupabase([
+    { method: "GET", path: "leads", match: (e) => e.query.includes("order=id.asc"), reply: lightRows },
+    { method: "PATCH", path: "leads", reply: lightRows.map((l) => ({ id: l.id })) },
+    { method: "GET", path: "leads", match: (e) => e.query.includes("status=neq.dnc"), reply: [] },
+    { method: "GET", path: "calls", reply: [] },
+  ]);
+}
+
+const lightLead = (o) => ({
+  id: o.id, vertical: "hvac", status: "to_call", bucket: "warm", score: 50,
+  callback_on: null, last_outcome: null, today_on: null,
+  first_seen_at: "2020-01-01T00:00:00Z", ...o,
+});
+
+test("desk API: the first request of the day composes and stamps today's list", withEnv(async () => {
+  const today = dayIn("America/Chicago");
+  const { log, fetchImpl } = todayFixture([
+    lightLead({ id: 1, bucket: "hot", score: 90 }),
+    lightLead({ id: 2, bucket: "hot", score: 80 }),
+    lightLead({ id: 3, status: "worked", last_outcome: "talked" }),  // already called
+    lightLead({ id: 4, status: "dnc", bucket: "hot", score: 99 }),   // never
+  ]);
+  globalThis.fetch = fetchImpl;
+  const res = await desk.GET(new Request("http://x/api/desk?vertical=all", { headers: H }));
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).counts.today, 2, "the count reflects the stamp it just wrote");
+
+  const patch = log.find((e) => e.method === "PATCH" && e.path === "leads");
+  assert.ok(patch, "composing writes the stamp");
+  assert.deepEqual(patch.body, { today_on: today });
+  assert.ok(decodeURIComponent(patch.query).includes("id=in.(1,2)"), "only the picked leads are stamped");
+}));
+
+test("desk API: a day already stamped is never recomposed", withEnv(async () => {
+  const today = dayIn("America/Chicago");
+  const { log, fetchImpl } = todayFixture([
+    lightLead({ id: 1, bucket: "hot", score: 90, today_on: today }),
+    lightLead({ id: 2, bucket: "hot", score: 95 }),  // better, but the list is frozen
+  ]);
+  globalThis.fetch = fetchImpl;
+  const res = await desk.GET(new Request("http://x/api/desk?vertical=all", { headers: H }));
+  assert.equal((await res.json()).counts.today, 1);
+  assert.ok(!log.some((e) => e.method === "PATCH"), "the morning's list stands for the day");
+}));
+
+test("desk API: the today tab reads the stamped set, with no run behind it", withEnv(async () => {
+  const today = dayIn("America/Chicago");
+  const { log, fetchImpl } = todayFixture([lightLead({ id: 1, bucket: "hot", today_on: today })]);
+  globalThis.fetch = fetchImpl;
+  const res = await desk.GET(new Request("http://x/api/desk?vertical=today", { headers: H }));
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).last_run, undefined, "a composed tab spans every vertical");
+  const list = log.find((e) => e.path === "leads" && e.query.includes("score.desc"));
+  assert.ok(decodeURIComponent(list.query).includes(`today_on=eq.${today}`));
+  assert.ok(!log.some((e) => e.path === "runs"), "no single run lies behind Today");
 }));
 
 test("desk API: an unknown tab is a 400", withEnv(async () => {

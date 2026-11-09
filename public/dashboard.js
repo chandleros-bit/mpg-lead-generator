@@ -12,7 +12,9 @@ import { openStatus } from "./hours.js";
 import {
   OUTCOME_LABELS, CONVERSATION_OUTCOMES, ATTEMPT_OUTCOMES, FILTERS, areaFrom, isNewLead,
   lastTouch, rowChips, visibleLeads, filterCounts, tabLeads, telHref,
+  applyOpenOnly, applySearch,
 } from "./desk-view.js";
+import { composeToday, orderToday, sectionLabel } from "./today.js";
 
 (function () {
   "use strict";
@@ -25,7 +27,7 @@ import {
 
   var state = {
     mode: DEMO ? "local" : "desk",
-    tab: "due",
+    tab: "today",
     filter: "to_call",
     openOnly: false,
     query: "",
@@ -50,7 +52,7 @@ import {
   var el = {};
   ["rows", "tab-title", "tab-meta", "run-line", "conv-total", "conv-of", "conv-bar", "conv-break", "goal-label",
    "copy-tracker", "runbar", "run-btn", "run-hint", "city-input", "state-input", "miles-input", "banner", "filters",
-   "open-only", "search", "download-csv", "tabs-niches", "tabs-broad", "count-due", "count-all", "count-new",
+   "open-only", "search", "download-csv", "tabs-niches", "tabs-broad", "count-today", "count-all", "count-new",
    "mode", "operator", "avatar", "brand-co", "toast"].forEach(function (id) {
     el[id.replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); })] = document.getElementById(id);
   });
@@ -114,10 +116,11 @@ import {
     return Promise.resolve();
   }
 
-  function isVerticalTab(tab) { return tab !== "due" && tab !== "all" && tab !== "new_week"; }
+  function isVerticalTab(tab) { return tab !== "today" && tab !== "due" && tab !== "all" && tab !== "new_week"; }
   function labelFor(id) { return state.labels[id] || String(id || "").replace(/_/g, " "); }
 
   function tabTitle(tab) {
+    if (tab === "today") return "Today";
     if (tab === "due") return "Due today";
     if (tab === "all") return "All leads";
     if (tab === "new_week") return "New this week";
@@ -127,16 +130,32 @@ import {
   // ---------- counts ----------
 
   function localCounts() {
-    var counts = { all: 0, due: 0, new_week: 0, verticals: {} };
+    var counts = { all: 0, due: 0, today: 0, new_week: 0, verticals: {} };
     var weekAgo = Date.now() - 7 * 86400000;
     state.localLeads.forEach(function (l) {
       if (l.status === "dnc") return;
       counts.all++;
       counts.verticals[l.vertical] = (counts.verticals[l.vertical] || 0) + 1;
       if (l.callback_on && l.callback_on <= state.today) counts.due++;
+      if (l.today_on === state.today) counts.today++;
       if (l.is_new || (l.first_seen_at && Date.parse(l.first_seen_at) >= weekAgo)) counts.new_week++;
     });
     return counts;
+  }
+
+  // Local mode has no database to stamp, so it composes the day in memory and
+  // marks the chosen leads on the objects themselves. Same freeze, same rules,
+  // same field name the desk uses — it just does not survive a reload, which
+  // is what local mode already promises about everything else.
+  function ensureLocalToday() {
+    var pool = state.localLeads;
+    if (!pool.length) return;
+    for (var i = 0; i < pool.length; i++) if (pool[i].today_on === state.today) return;
+    composeToday(pool, { today: state.today, goal: state.goal || 40 })
+      .forEach(function (row) {
+        var hit = pool.find(function (l) { return l.id === row.id; });
+        if (hit) hit.today_on = state.today;
+      });
   }
 
   function localConv() {
@@ -150,8 +169,8 @@ import {
   // ---------- rendering ----------
 
   function renderSidebar() {
-    var counts = state.mode === "local" ? localCounts() : (state.counts || { all: 0, due: 0, new_week: 0, verticals: {} });
-    el.countDue.textContent = counts.due;
+    var counts = state.mode === "local" ? localCounts() : (state.counts || { all: 0, today: 0, new_week: 0, verticals: {} });
+    el.countToday.textContent = counts.today || 0;
     el.countAll.textContent = counts.all;
     el.countNew.textContent = counts.new_week;
     function tabs(list) {
@@ -216,7 +235,7 @@ import {
   function renderFilters() {
     var pool = tabLeads(currentPool(), state.tab, state.today);
     var counts = filterCounts(pool, lastRunId());
-    el.filters.hidden = state.tab === "due";
+    el.filters.hidden = state.tab === "due" || state.tab === "today";
     el.filters.innerHTML = FILTERS.map(function (f) {
       return '<button type="button" data-filter="' + f[0] + '" class="' + (state.filter === f[0] ? "is-active" : "") +
         '" aria-pressed="' + (state.filter === f[0]) + '">' + f[1] + " <span>" + counts[f[0]] + "</span></button>";
@@ -227,9 +246,21 @@ import {
   function lastRunId() { return state.lastRun ? state.lastRun.id : null; }
 
   function visible() {
+    var now = Date.now();
+    // Today is ordered by its own rules, not by the shared sort: section
+    // first, then callback age or score inside it. Open-now and the search
+    // box still apply — narrowing the sheet is fine, reshuffling it is not.
+    if (state.tab === "today") {
+      var members = currentPool().filter(function (l) {
+        return l.status !== "dnc" && l.today_on === state.today;
+      });
+      return applySearch(
+        applyOpenOnly(orderToday(members, { today: state.today, nowMs: now }), state.openOnly, now),
+        state.query);
+    }
     return visibleLeads(currentPool(), {
       tab: state.tab, filter: state.filter, openOnly: state.openOnly, query: state.query,
-      today: state.today, lastRunId: lastRunId(), nowMs: Date.now(),
+      today: state.today, lastRunId: lastRunId(), nowMs: now,
     });
   }
 
@@ -242,7 +273,7 @@ import {
     var touch = lastTouch(l, state.today);
     var tel = telHref(l.phone);
     var sub = [areaFrom(l.address), l.track === "greenfield" ? "Greenfield" : "Displacement"];
-    if (state.tab === "all" || state.tab === "due" || state.tab === "new_week") sub.push(labelFor(l.vertical));
+    if (!isVerticalTab(state.tab)) sub.push(labelFor(l.vertical));
     var chips = rowChips(l.why).map(function (c) {
       return '<span class="chip' + (c.kind === "plain" ? "" : " " + c.kind) + '" title="' + esc(c.text) + '">' + esc(c.text) + "</span>";
     }).join("");
@@ -341,17 +372,36 @@ import {
   function renderRows() {
     var rows = visible();
     if (!rows.length) {
-      var msg = state.tab === "due" ? "<strong>Nothing due today.</strong>Callbacks you set show up here on their day."
+      var msg = state.tab === "today"
+        ? (currentPool().length === 0
+            ? "<strong>Nothing to work yet.</strong>Pick a niche on the left and run a search — tomorrow's list builds itself from what you save."
+            : "<strong>Today's list is clear.</strong>Every lead on it is worked. Open a niche to call further down the list.")
+        : state.tab === "due" ? "<strong>Nothing due today.</strong>Callbacks you set show up here on their day."
         : currentPool().length === 0 && isVerticalTab(state.tab)
           ? "<strong>No saved leads in " + esc(labelFor(state.tab)) + " yet.</strong>Pick a city and run a search."
           : "<strong>No leads match.</strong>Try another filter, or turn off Open now only.";
       el.rows.innerHTML = '<div class="empty">' + msg + "</div>";
       return;
     }
-    el.rows.innerHTML = rows.map(rowHtml).join("");
+    if (state.tab !== "today") {
+      el.rows.innerHTML = rows.map(rowHtml).join("");
+      return;
+    }
+    // Section headers break the sheet into the order you work it.
+    var seen = null;
+    el.rows.innerHTML = rows.map(function (l) {
+      var head = "";
+      if (l.section !== seen) {
+        seen = l.section;
+        var n = rows.filter(function (r) { return r.section === l.section; }).length;
+        head = '<div class="sec"><span>' + esc(sectionLabel(l.section)) + "</span><span>" + n + "</span></div>";
+      }
+      return head + rowHtml(l);
+    }).join("");
   }
 
   function render() {
+    if (state.mode === "local") ensureLocalToday();
     renderSidebar();
     renderHead();
     renderFilters();
@@ -381,7 +431,7 @@ import {
   function loadTab() {
     state.today = dayIn(new Date());
     if (state.mode === "local") { render(); return Promise.resolve(); }
-    var v = isVerticalTab(state.tab) ? state.tab : "all";
+    var v = isVerticalTab(state.tab) ? state.tab : state.tab === "today" ? "today" : "all";
     el.rows.innerHTML = '<div class="state">Loading…</div>';
     return api("/api/desk?vertical=" + encodeURIComponent(v)).then(function (res) {
       // Two ways the desk runs without a database, and they send the user to
@@ -569,7 +619,7 @@ import {
     if (!b) return;
     state.tab = b.getAttribute("data-tab");
     state.openId = null;
-    if (state.tab !== "due" && state.filter === "worked" && !isVerticalTab(state.tab)) state.filter = "to_call";
+    if (state.tab !== "due" && state.tab !== "today" && state.filter === "worked" && !isVerticalTab(state.tab)) state.filter = "to_call";
     store(KEYS.tab, state.tab);
     loadTab();
   });
@@ -705,8 +755,10 @@ import {
         el.milesInput.value = recall(KEYS.miles) || (m ? Math.max(1, Math.round(m / 1609.344)) : 9);
       }
       var saved = recall(KEYS.tab);
-      var known = saved && (state.labels[saved] || saved === "due" || saved === "all" || saved === "new_week");
-      state.tab = DEMO ? "all" : known ? saved : "due";
+      // "due" is a tab this build no longer has; anyone who left it stored
+      // lands on Today, which is where its callbacks live now.
+      var known = saved && (state.labels[saved] || saved === "today" || saved === "all" || saved === "new_week");
+      state.tab = DEMO ? "all" : known ? saved : "today";
     });
 
     shell.then(loadTab).then(function () { if (DEMO) runSearch(); });

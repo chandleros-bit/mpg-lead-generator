@@ -75,8 +75,14 @@ export function hoursLabel(lead, nowMs) {
 }
 
 // Which leads a tab shows before the filter row applies.
+//
+// "today" is membership in the day's composed sheet, nothing more: a lead is
+// on it because it was stamped this morning, not because it still qualifies.
+// public/today.js owns the picking and the ordering; keeping that import out
+// of this file is what stops the two from importing each other.
 export function tabLeads(leads, tab, today, now = Date.now()) {
   const live = leads.filter((l) => l.status !== "dnc");
+  if (tab === "today") return live.filter((l) => l.today_on === today);
   if (tab === "due") return live.filter((l) => isDue(l, today));
   if (tab === "new_week") {
     const weekAgo = now - 7 * 86400000;
@@ -141,10 +147,12 @@ export function orderLeads(leads, tab, today) {
   });
 }
 
+// A composed tab crossed with a filter is neither, so "due" and "today" skip
+// the filter row — which is hidden for them anyway.
 export function visibleLeads(leads, opts) {
   const { tab, filter, openOnly, query, today, lastRunId, nowMs } = opts;
   let rows = tabLeads(leads, tab, today, nowMs);
-  if (tab !== "due") rows = applyFilter(rows, filter, lastRunId);
+  if (tab !== "due" && tab !== "today") rows = applyFilter(rows, filter, lastRunId);
   rows = applyOpenOnly(rows, openOnly, nowMs);
   rows = applySearch(rows, query);
   return orderLeads(rows, tab, today);
