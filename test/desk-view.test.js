@@ -13,6 +13,33 @@ function lead(o) {
     callback_on: null, last_outcome: null, notes: "", ...o };
 }
 
+test("visibleLeads narrows by facets, on top of the status filter", () => {
+  const rows = [
+    lead({ id: 1, track: "displacement", bucket: "hot", website: "", name: "A" }),
+    lead({ id: 2, track: "greenfield", bucket: "hot", website: "", name: "B" }),
+    lead({ id: 3, track: "displacement", bucket: "hot", website: "https://x.co", name: "C" }),
+    lead({ id: 4, track: "displacement", bucket: "hot", website: "", name: "D", status: "worked" }),
+  ];
+  const opts = { tab: "hvac", filter: "hot", today: TODAY, lastRunId: null, nowMs: NOW };
+  assert.deepEqual(
+    visibleLeads(rows, { ...opts, facets: { track: ["displacement"], no_website: true } }).map((l) => l.id),
+    [1], "the worked one is cut by the status filter, the others by the facets");
+  assert.deepEqual(
+    visibleLeads(rows, { ...opts, facets: {} }).map((l) => l.id), [1, 2, 3],
+    "no facets leaves the status filter's result alone");
+});
+
+test("composed tabs take no facets", () => {
+  const rows = [
+    lead({ id: 1, track: "greenfield", today_on: TODAY }),
+    lead({ id: 2, track: "displacement", today_on: TODAY }),
+  ];
+  assert.equal(
+    visibleLeads(rows, { tab: "today", filter: "to_call", facets: { track: ["greenfield"] },
+      today: TODAY, lastRunId: null, nowMs: NOW }).length,
+    2, "Today is an ordered list with its own rules; a filter would make it neither");
+});
+
 test("area reads city and ZIP from a Google address", () => {
   assert.equal(areaFrom("21902 Katy Fwy, Katy, TX 77450, USA"), "Katy 77450");
   assert.equal(areaFrom("1 Main"), "1 Main");

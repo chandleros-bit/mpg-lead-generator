@@ -158,6 +158,63 @@ a:hover { color: #1E3A8A; }
 .open-toggle input { width: 16px; height: 16px; margin: 0; accent-color: #15803D; }
 #search { padding: 9px 12px; width: 220px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-size: 13px; }
 
+/* ---------- Facets ---------- */
+.facet-wrap { position: relative; }
+#facet-btn { display: inline-flex; align-items: center; gap: 7px; }
+#facet-btn.is-on { border-color: #C9D6F7; background: var(--blue-tint); color: var(--blue); font-weight: 600; }
+.badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--blue); color: #fff; font-family: var(--mono); font-size: 11px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.facet-panel {
+  position: absolute; z-index: 20; top: calc(100% + 6px); left: 0;
+  width: min(460px, calc(100vw - 48px)); max-height: 70vh; overflow-y: auto;
+  padding: 4px 0; background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: 0 12px 28px rgba(14,17,22,.14);
+}
+.fct-group { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); }
+.fct-group:last-of-type { border-bottom: 0; }
+.fct-head { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.fct-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 7px; }
+.fct-row:last-child { margin-bottom: 0; }
+.fct-label { flex: 0 0 104px; font-size: 13px; color: var(--muted); }
+.fct-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.fct {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+  font-size: 13px; cursor: pointer;
+}
+.fct span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.fct:hover { border-color: #C9D6F7; }
+.fct.is-on { border-color: var(--blue); background: var(--blue-tint); color: var(--blue); font-weight: 600; }
+.fct.is-on span { color: var(--blue); }
+.fct-range { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.fct-range input { width: 68px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+.fct-foot { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.btn-sm { min-height: 32px; padding: 0 12px; font-size: 13px; }
+
+/* Active filters, so what is narrowing the list is visible without opening
+   the panel. Each chip removes just what it names. */
+.chips-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.achip {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 10px;
+  border: 1px solid #C9D6F7; border-radius: 999px; background: var(--blue-tint);
+  color: var(--blue); font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.achip span { font-size: 14px; line-height: 1; opacity: .7; }
+.achip:hover { background: #E2EAFD; }
+.achip-clear { border-color: var(--line); background: transparent; color: var(--muted); }
+
+/* ---------- Saved views ---------- */
+.views { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.views-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.view-pill { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 999px; background: var(--card); overflow: hidden; }
+.view-pill button { border: 0; background: transparent; padding: 0 12px; min-height: 30px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.view-pill button:first-child:hover { background: var(--blue-tint); color: var(--blue); }
+.view-x { padding: 0 9px !important; color: var(--muted); font-size: 15px; line-height: 1; border-left: 1px solid var(--line-soft) !important; }
+.view-x:hover { background: #FDECEC; color: #B42318; }
+
 /* ---------- Table ---------- */
 .table-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; box-shadow: 0 1px 2px rgba(14,17,22,.04); }
 .table { min-width: 1000px; }

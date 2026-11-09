@@ -82,9 +82,17 @@
 
     <div class="banner" id="banner" hidden></div>
 
+    <div class="views" id="views" hidden></div>
+
     <div class="tools">
       <div class="tools-left">
         <div class="seg" role="group" aria-label="Filter leads" id="filters"></div>
+        <div class="facet-wrap">
+          <button class="btn btn-quiet" id="facet-btn" type="button" aria-expanded="false" aria-controls="facet-panel">
+            Filters<span class="badge" id="facet-badge" hidden>0</span>
+          </button>
+          <div class="facet-panel" id="facet-panel" hidden role="dialog" aria-label="Filters"></div>
+        </div>
         <label class="open-toggle">
           <input type="checkbox" id="open-only">Open now only
         </label>
@@ -96,6 +104,8 @@
         <button class="btn btn-quiet" id="download-csv" type="button">Export CSV</button>
       </div>
     </div>
+
+    <div class="chips-row" id="active-chips" hidden></div>
 
     <div class="table-wrap">
       <div class="table" id="table">

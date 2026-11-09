@@ -4,7 +4,7 @@
 // Named GET/POST exports, never a default export: see the long note in
 // api/leads.js on how Vercel picks the calling convention.
 import { loadConfig } from "../lib/config.js";
-import { dbConfig, select, selectAll, insert, update, DbUnreachable } from "../lib/db.js";
+import { dbConfig, select, selectAll, insert, update, remove, DbUnreachable } from "../lib/db.js";
 import {
   DEFAULT_GOAL, DEFAULT_TIMEZONE, OUTCOMES, isOutcome, isIsoDate, dayIn,
   leadPatchForOutcome, conversationCounts, sidebarCounts, visitsTsv,
@@ -14,6 +14,10 @@ import { getVertical } from "../lib/verticals/index.js";
 // header of that file. Importing them here is what keeps the list the server
 // stamps and the list the browser draws the same list.
 import { selectToday } from "../public/today.js";
+import { sanitize as sanitizeFacets } from "../public/facets.js";
+
+const VIEW_COLUMNS = "id,name,tab,filter,facets,open_only,position";
+const MAX_VIEWS = 40;
 
 function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
@@ -79,9 +83,10 @@ export async function ensureToday(db, today, goal, light) {
 }
 
 async function summary(db, today, goal) {
-  const [rows, calls] = await Promise.all([
+  const [rows, calls, views] = await Promise.all([
     selectAll(db, "leads", `select=${LIGHT_COLUMNS}&order=id.asc`),
     select(db, "calls", `select=outcome&call_date=eq.${today}`),
+    select(db, "saved_views", `select=${VIEW_COLUMNS}&order=position.asc,id.asc`),
   ]);
   const light = await ensureToday(db, today, goal, rows);
   return {
@@ -90,6 +95,7 @@ async function summary(db, today, goal) {
     goal,
     counts: sidebarCounts(light, today),
     conversations: conversationCounts(calls),
+    views: views || [],
   };
 }
 
@@ -152,6 +158,47 @@ export async function GET(req) {
   }
 }
 
+// Save or delete one view, and answer with the whole list either way — it is
+// short, the client redraws the pills from it, and that spares a reload after
+// every change.
+async function viewAction(db, body) {
+  const list = () => select(db, "saved_views", `select=${VIEW_COLUMNS}&order=position.asc,id.asc`);
+
+  if (body.action === "delete_view") {
+    const id = Number(body.view_id);
+    if (!Number.isInteger(id) || id <= 0) return json({ error: "Bad view id." }, 400);
+    await remove(db, "saved_views", `id=eq.${id}&select=id`);
+    return json({ views: await list() });
+  }
+
+  const name = String(body.name || "").trim().slice(0, 60);
+  if (!name) return json({ error: "A view needs a name." }, 400);
+  const existing = await list();
+  if (existing.length >= MAX_VIEWS) {
+    return json({ error: `That is ${MAX_VIEWS} saved views. Delete one first.` }, 400);
+  }
+  // Facets are sanitized against this build's own facet table, so a payload
+  // naming a filter that does not exist cannot be stored and read back as one.
+  const row = {
+    name,
+    tab: body.tab ? String(body.tab).slice(0, 40) : null,
+    filter: body.filter ? String(body.filter).slice(0, 40) : null,
+    facets: sanitizeFacets(body.facets),
+    open_only: body.open_only === true,
+    position: existing.length,
+  };
+  // One name, one view: saving over a name you already used replaces it,
+  // which is what "save" means when the name is how you find it again.
+  const clash = existing.find((v) => v.name.toLowerCase() === name.toLowerCase());
+  if (clash) {
+    await update(db, "saved_views", `id=eq.${clash.id}&select=id`,
+      { ...row, position: clash.position });
+  } else {
+    await insert(db, "saved_views", [row]);
+  }
+  return json({ views: await list() });
+}
+
 export async function POST(req) {
   const ctx = context(req);
   if (ctx.error) return ctx.error;
@@ -159,6 +206,15 @@ export async function POST(req) {
 
   let body;
   try { body = await req.json(); } catch { return json({ error: "Body must be JSON." }, 400); }
+
+  // Saved views come first: they carry no lead_id, and the check below would
+  // turn every one of them into a 400.
+  if (body.action === "save_view" || body.action === "delete_view") {
+    try { return await viewAction(db, body); } catch (e) {
+      return dbFailure(e) ?? json({ error: e.message }, 502);
+    }
+  }
+
   const leadId = Number(body && body.lead_id);
   if (!Number.isInteger(leadId) || leadId <= 0) return json({ error: "Bad lead id." }, 400);
   if (body.callback_on != null && body.callback_on !== "" && !isIsoDate(body.callback_on)) {

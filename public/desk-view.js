@@ -2,6 +2,7 @@
 // Pure view logic for the call desk: which leads a tab and filter show, and
 // how a row reads. Browser-loaded and unit-tested with node --test. No DOM.
 import { openStatus } from "./hours.js";
+import { applyFacets } from "./facets.js";
 
 export const OUTCOME_LABELS = {
   no_answer: "No answer",
@@ -149,10 +150,16 @@ export function orderLeads(leads, tab, today) {
 
 // A composed tab crossed with a filter is neither, so "due" and "today" skip
 // the filter row — which is hidden for them anyway.
+// Order matters only for cost, not for the result: the status filter is the
+// cheapest cut and goes first, then the facets, then open-now, which has to
+// read each lead's hours, and the text search last.
 export function visibleLeads(leads, opts) {
-  const { tab, filter, openOnly, query, today, lastRunId, nowMs } = opts;
+  const { tab, filter, openOnly, query, today, lastRunId, nowMs, facets } = opts;
   let rows = tabLeads(leads, tab, today, nowMs);
-  if (tab !== "due" && tab !== "today") rows = applyFilter(rows, filter, lastRunId);
+  if (tab !== "due" && tab !== "today") {
+    rows = applyFilter(rows, filter, lastRunId);
+    rows = applyFacets(rows, facets, nowMs);
+  }
   rows = applyOpenOnly(rows, openOnly, nowMs);
   rows = applySearch(rows, query);
   return orderLeads(rows, tab, today);

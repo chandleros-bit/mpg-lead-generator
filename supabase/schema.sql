@@ -82,9 +82,26 @@ create table if not exists calls (
 
 create index if not exists calls_date_idx on calls (call_date);
 
-alter table runs  enable row level security;
-alter table leads enable row level security;
-alter table calls enable row level security;
+-- A named filter set: the status filter, the facets, and the open-now toggle,
+-- kept so a combination worth building is a click to get back to. Stored here
+-- rather than in the browser so a view built at the desk is on the phone too.
+create table if not exists saved_views (
+  id         bigserial primary key,
+  name       text not null,
+  tab        text,                              -- where it was saved; null means anywhere
+  filter     text,
+  facets     jsonb not null default '{}',
+  open_only  boolean not null default false,
+  position   integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists saved_views_order_idx on saved_views (position, id);
+
+alter table runs        enable row level security;
+alter table leads       enable row level security;
+alter table calls       enable row level security;
+alter table saved_views enable row level security;
 
 -- Save one search run. New businesses are inserted; ones already saved get
 -- their score, signals and contact details refreshed, but keep their tab,

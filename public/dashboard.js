@@ -12,9 +12,13 @@ import { openStatus } from "./hours.js";
 import {
   OUTCOME_LABELS, CONVERSATION_OUTCOMES, ATTEMPT_OUTCOMES, FILTERS, areaFrom, isNewLead,
   lastTouch, rowChips, visibleLeads, filterCounts, tabLeads, telHref,
-  applyOpenOnly, applySearch,
+  applyOpenOnly, applySearch, applyFilter,
 } from "./desk-view.js";
 import { composeToday, orderToday, sectionLabel } from "./today.js";
+import {
+  FACETS, getFacet, optionsFor, facetCounts, toggleValue, setFacet,
+  activeChips, clearChip, countActive, sanitize as sanitizeFacets,
+} from "./facets.js";
 
 (function () {
   "use strict";
@@ -29,6 +33,9 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
     mode: DEMO ? "local" : "desk",
     tab: "today",
     filter: "to_call",
+    facets: {},         // see public/facets.js; absent key means not filtering
+    views: [],          // saved filter sets, from the database
+    panelOpen: false,
     openOnly: false,
     query: "",
     leads: [],          // what the current tab loaded (desk) or everything (local)
@@ -53,6 +60,7 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
   ["rows", "tab-title", "tab-meta", "run-line", "conv-total", "conv-of", "conv-bar", "conv-break", "goal-label",
    "copy-tracker", "runbar", "run-btn", "run-hint", "city-input", "state-input", "miles-input", "banner", "filters",
    "open-only", "search", "download-csv", "tabs-niches", "tabs-broad", "count-today", "count-all", "count-new",
+   "facet-btn", "facet-badge", "facet-panel", "active-chips", "views",
    "mode", "operator", "avatar", "brand-co", "toast"].forEach(function (id) {
     el[id.replace(/-([a-z])/g, function (_, c) { return c.toUpperCase(); })] = document.getElementById(id);
   });
@@ -242,6 +250,100 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
     }).join("");
   }
 
+  // ---------- facets ----------
+
+  // Facets narrow whatever the status segment selected, so their counts are
+  // taken against that, not against the whole tab.
+  function facetPool() {
+    if (!facetsApply()) return [];
+    var pool = tabLeads(currentPool(), state.tab, state.today);
+    return applyFilter(pool, state.filter, lastRunId());
+  }
+
+  function facetsApply() { return state.tab !== "due" && state.tab !== "today"; }
+
+  // Dataset values are strings. Rather than guess how to coerce one back, look
+  // it up in the facet's own option list and use the value declared there.
+  function optionValue(facet, raw) {
+    var hit = optionsFor(facet, facetPool()).find(function (o) { return String(o[0]) === String(raw); });
+    return hit ? hit[0] : raw;
+  }
+
+  function facetControl(f, pool) {
+    var cur = state.facets[f.id];
+    if (f.kind === "range") {
+      var v = cur || [f.min, f.max];
+      return '<div class="fct-range">' +
+        '<label><span class="sr-only">Minimum score</span><input type="number" data-range="' + f.id + '" data-end="0" min="' + f.min + '" max="' + f.max + '" value="' + v[0] + '"></label>' +
+        "<span>to</span>" +
+        '<label><span class="sr-only">Maximum score</span><input type="number" data-range="' + f.id + '" data-end="1" min="' + f.min + '" max="' + f.max + '" value="' + v[1] + '"></label>' +
+        "</div>";
+    }
+    var counts = facetCounts(pool, state.facets, f.id, Date.now());
+    if (f.kind === "toggle") {
+      return '<button type="button" class="fct' + (cur === true ? " is-on" : "") + '" data-facet="' + f.id +
+        '" aria-pressed="' + (cur === true) + '"' + (f.hint ? ' title="' + esc(f.hint) + '"' : "") +
+        ">" + esc(f.label) + "<span>" + (counts["true"] || 0) + "</span></button>";
+    }
+    return optionsFor(f, pool).map(function (o) {
+      var on = f.single ? cur === o[0] : (cur || []).indexOf(o[0]) >= 0;
+      return '<button type="button" class="fct' + (on ? " is-on" : "") + '" data-facet="' + f.id +
+        '" data-value="' + esc(o[0]) + '" aria-pressed="' + on + '">' + esc(o[1]) +
+        "<span>" + (counts[o[0]] || 0) + "</span></button>";
+    }).join("");
+  }
+
+  function renderFacets() {
+    var apply = facetsApply();
+    el.facetBtn.parentNode.hidden = !apply;
+    if (!apply) { el.facetPanel.hidden = true; el.activeChips.hidden = true; return; }
+
+    var n = countActive(state.facets);
+    el.facetBadge.hidden = !n;
+    el.facetBadge.textContent = n;
+    el.facetBtn.classList.toggle("is-on", !!n);
+    el.facetBtn.setAttribute("aria-expanded", String(state.panelOpen));
+    el.facetPanel.hidden = !state.panelOpen;
+
+    if (state.panelOpen) {
+      var pool = facetPool();
+      var groups = [];
+      FACETS.forEach(function (f) {
+        var g = groups[groups.length - 1];
+        if (!g || g.name !== f.group) groups.push({ name: f.group, items: [f] });
+        else g.items.push(f);
+      });
+      el.facetPanel.innerHTML = groups.map(function (g) {
+        return '<div class="fct-group"><div class="fct-head">' + esc(g.name) + "</div>" +
+          g.items.map(function (f) {
+            var label = f.kind === "toggle" ? "" : '<div class="fct-label">' + esc(f.label) + "</div>";
+            return '<div class="fct-row">' + label + '<div class="fct-opts">' + facetControl(f, pool) + "</div></div>";
+          }).join("") + "</div>";
+      }).join("") +
+        '<div class="fct-foot">' +
+          '<button type="button" class="btn btn-quiet btn-sm" id="facet-clear"' + (n ? "" : " disabled") + ">Clear all</button>" +
+          '<button type="button" class="btn btn-dark btn-sm" id="facet-save">Save as view</button>' +
+        "</div>";
+    }
+
+    var chips = activeChips(state.facets, currentPool());
+    el.activeChips.hidden = !chips.length;
+    el.activeChips.innerHTML = chips.map(function (c) {
+      return '<button type="button" class="achip" data-chip="' + esc(c.id) + '" data-value="' + esc(c.value == null ? "" : c.value) +
+        '" aria-label="Remove filter ' + esc(c.label) + '">' + esc(c.label) + "<span aria-hidden=\"true\">&times;</span></button>";
+    }).join("") + (chips.length > 1 ? '<button type="button" class="achip achip-clear" data-chip="*">Clear all</button>' : "");
+  }
+
+  function renderViews() {
+    var views = state.views || [];
+    el.views.hidden = !views.length;
+    if (!views.length) return;
+    el.views.innerHTML = '<span class="views-label">Views</span>' + views.map(function (v) {
+      return '<span class="view-pill"><button type="button" data-view="' + v.id + '">' + esc(v.name) + "</button>" +
+        '<button type="button" class="view-x" data-view-del="' + v.id + '" aria-label="Delete the view ' + esc(v.name) + '">&times;</button></span>';
+    }).join("");
+  }
+
   function currentPool() { return state.mode === "local" ? state.localLeads : state.leads; }
   function lastRunId() { return state.lastRun ? state.lastRun.id : null; }
 
@@ -259,8 +361,8 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
         state.query);
     }
     return visibleLeads(currentPool(), {
-      tab: state.tab, filter: state.filter, openOnly: state.openOnly, query: state.query,
-      today: state.today, lastRunId: lastRunId(), nowMs: now,
+      tab: state.tab, filter: state.filter, facets: state.facets, openOnly: state.openOnly,
+      query: state.query, today: state.today, lastRunId: lastRunId(), nowMs: now,
     });
   }
 
@@ -379,7 +481,9 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
         : state.tab === "due" ? "<strong>Nothing due today.</strong>Callbacks you set show up here on their day."
         : currentPool().length === 0 && isVerticalTab(state.tab)
           ? "<strong>No saved leads in " + esc(labelFor(state.tab)) + " yet.</strong>Pick a city and run a search."
-          : "<strong>No leads match.</strong>Try another filter, or turn off Open now only.";
+          : countActive(state.facets)
+            ? "<strong>No leads match.</strong>Clear a filter chip, or turn off Open now only."
+            : "<strong>No leads match.</strong>Try another filter, or turn off Open now only.";
       el.rows.innerHTML = '<div class="empty">' + msg + "</div>";
       return;
     }
@@ -404,7 +508,9 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
     if (state.mode === "local") ensureLocalToday();
     renderSidebar();
     renderHead();
+    renderViews();
     renderFilters();
+    renderFacets();
     renderCounter();
     renderRows();
   }
@@ -461,6 +567,7 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
       state.goal = d.goal || state.goal;
       state.today = d.today || state.today;
       state.lastRun = d.last_run || null;
+      if (d.views) state.views = d.views;
       render();
     }).catch(function () {
       el.rows.innerHTML = '<div class="empty"><strong>Could not reach the server.</strong>Check your connection and reload.</div>';
@@ -630,7 +737,140 @@ import { composeToday, orderToday, sectionLabel } from "./today.js";
     state.filter = b.getAttribute("data-filter");
     state.openId = null;
     renderFilters();
+    renderFacets();   // the counts are taken against the status filter
     renderRows();
+  });
+
+  // ---------- facets ----------
+
+  function refilter() {
+    state.openId = null;
+    renderFilters();
+    renderFacets();
+    renderHead();
+    renderRows();
+  }
+
+  el.facetBtn.addEventListener("click", function () {
+    state.panelOpen = !state.panelOpen;
+    renderFacets();
+  });
+
+  el.facetPanel.addEventListener("click", function (e) {
+    var opt = e.target.closest("[data-facet]");
+    if (opt) {
+      var id = opt.getAttribute("data-facet");
+      var raw = opt.getAttribute("data-value");
+      var f = getFacet(id);
+      state.facets = toggleValue(state.facets, id, raw == null ? true : optionValue(f, raw));
+      refilter();
+      return;
+    }
+    if (e.target.closest("#facet-clear")) { state.facets = {}; refilter(); return; }
+    if (e.target.closest("#facet-save")) saveView();
+  });
+
+  el.facetPanel.addEventListener("change", function (e) {
+    var input = e.target.closest("[data-range]");
+    if (!input) return;
+    var f = getFacet(input.getAttribute("data-range"));
+    var cur = (state.facets[f.id] || [f.min, f.max]).slice();
+    cur[Number(input.getAttribute("data-end"))] = Math.min(f.max, Math.max(f.min, Number(input.value)));
+    // A reversed range matches nothing and reads like a bug, so keep the ends
+    // in order rather than letting the list go silently empty.
+    if (cur[0] > cur[1]) cur = [Math.min(cur[0], cur[1]), Math.max(cur[0], cur[1])];
+    state.facets = setFacet(state.facets, f.id, cur);
+    refilter();
+  });
+
+  el.activeChips.addEventListener("click", function (e) {
+    var chip = e.target.closest("[data-chip]");
+    if (!chip) return;
+    var id = chip.getAttribute("data-chip");
+    if (id === "*") state.facets = {};
+    else {
+      var raw = chip.getAttribute("data-value");
+      state.facets = clearChip(state.facets, id, raw ? optionValue(getFacet(id), raw) : null);
+    }
+    refilter();
+  });
+
+  // Click outside closes the panel. On the capture phase, and that is
+  // load-bearing: picking a facet re-renders the panel, which detaches the
+  // button that was clicked, and a detached node has no ancestors — so on the
+  // bubble phase this check would find no .facet-wrap above the target and
+  // close the panel on every pick. Capture runs before the re-render, while
+  // the node is still in the tree.
+  document.addEventListener("click", function (e) {
+    if (!state.panelOpen) return;
+    if (e.target.closest(".facet-wrap")) return;
+    state.panelOpen = false;
+    // The pick handlers have not run yet, so let them finish first.
+    setTimeout(renderFacets, 0);
+  }, true);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && state.panelOpen) { state.panelOpen = false; renderFacets(); }
+  });
+
+  // ---------- saved views ----------
+
+  function postView(body) {
+    if (state.mode === "local") { toast("Saved views need the database."); return; }
+    api("/api/desk", { method: "POST", body: body }).then(function (res) {
+      if (!res.ok || !res.parsed) { toast("Could not save the view: " + errorMessage(res)); return; }
+      state.views = res.data.views || [];
+      renderViews();
+    }).catch(function () { toast("Could not reach the server. The view was not saved."); });
+  }
+
+  function saveView() {
+    // Before the prompt, not after it: asking for a name and then refusing to
+    // keep it is a worse answer than refusing up front.
+    if (state.mode === "local") { toast("Saved views need the database."); return; }
+    if (!countActive(state.facets) && state.filter === "to_call" && !state.openOnly) {
+      toast("Set a filter or two first, then save it as a view.");
+      return;
+    }
+    var name = (window.prompt("Name this view:") || "").trim();
+    if (!name) return;
+    state.panelOpen = false;
+    renderFacets();
+    postView({ action: "save_view", name: name, tab: state.tab, filter: state.filter,
+      facets: state.facets, open_only: state.openOnly });
+  }
+
+  function applyView(v) {
+    state.facets = sanitizeFacets(v.facets);
+    state.filter = v.filter || "to_call";
+    state.openOnly = !!v.open_only;
+    el.openOnly.checked = state.openOnly;
+    store(KEYS.open, state.openOnly ? "1" : "");
+    state.panelOpen = false;
+    // A view saved on a vertical's tab takes you back to it; one saved
+    // somewhere without a tab of its own applies where you are.
+    if (v.tab && v.tab !== state.tab && (state.labels[v.tab] || v.tab === "all" || v.tab === "new_week")) {
+      state.tab = v.tab;
+      store(KEYS.tab, state.tab);
+      loadTab();
+      return;
+    }
+    refilter();
+  }
+
+  el.views.addEventListener("click", function (e) {
+    var del = e.target.closest("[data-view-del]");
+    if (del) {
+      var id = Number(del.getAttribute("data-view-del"));
+      var doomed = (state.views || []).find(function (v) { return v.id === id; });
+      if (!doomed || !window.confirm('Delete the view "' + doomed.name + '"?')) return;
+      postView({ action: "delete_view", view_id: id });
+      return;
+    }
+    var hit = e.target.closest("[data-view]");
+    if (!hit) return;
+    var v = (state.views || []).find(function (x) { return x.id === Number(hit.getAttribute("data-view")); });
+    if (v) applyView(v);
   });
 
   el.openOnly.addEventListener("change", function () {

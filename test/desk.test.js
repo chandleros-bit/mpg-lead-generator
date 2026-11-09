@@ -249,6 +249,72 @@ test("desk API: the today tab reads the stamped set, with no run behind it", wit
   assert.ok(!log.some((e) => e.path === "runs"), "no single run lies behind Today");
 }));
 
+test("desk API: saving a view stores it and answers with the whole list", withEnv(async () => {
+  const { log, fetchImpl } = fakeSupabase([
+    { method: "GET", path: "saved_views", reply: [] },
+    { method: "POST", path: "saved_views", reply: [{ id: 1 }] },
+  ]);
+  globalThis.fetch = fetchImpl;
+  const res = await desk.POST(new Request("http://x/api/desk", {
+    method: "POST", headers: { ...H, "content-type": "application/json" },
+    body: JSON.stringify({
+      action: "save_view", name: "  Hot displacement  ", tab: "hvac", filter: "hot",
+      open_only: true,
+      // distance_miles is not a facet this build has; it must not be stored.
+      facets: { track: ["displacement"], distance_miles: 5, processor: false },
+    }),
+  }));
+  assert.equal(res.status, 200);
+  assert.ok(Array.isArray((await res.json()).views));
+  const ins = log.find((e) => e.method === "POST" && e.path === "saved_views");
+  assert.deepEqual(ins.body, [{
+    name: "Hot displacement", tab: "hvac", filter: "hot",
+    facets: { track: ["displacement"] }, open_only: true, position: 0,
+  }]);
+}));
+
+test("desk API: saving over a name replaces that view instead of adding one", withEnv(async () => {
+  const { log, fetchImpl } = fakeSupabase([
+    { method: "GET", path: "saved_views", reply: [{ id: 7, name: "Hot displacement", position: 2 }] },
+    { method: "PATCH", path: "saved_views", reply: [{ id: 7 }] },
+  ]);
+  globalThis.fetch = fetchImpl;
+  await desk.POST(new Request("http://x/api/desk", {
+    method: "POST", headers: { ...H, "content-type": "application/json" },
+    body: JSON.stringify({ action: "save_view", name: "HOT DISPLACEMENT", facets: { processor: true } }),
+  }));
+  const patch = log.find((e) => e.method === "PATCH" && e.path === "saved_views");
+  assert.ok(patch, "the clash is updated, not inserted");
+  assert.ok(patch.query.includes("id=eq.7"));
+  assert.equal(patch.body.position, 2, "it keeps its place in the row");
+  assert.ok(!log.some((e) => e.method === "POST" && e.path === "saved_views"));
+}));
+
+test("desk API: a view needs a name, and a delete needs an id", withEnv(async () => {
+  globalThis.fetch = fakeSupabase([{ method: "GET", path: "saved_views", reply: [] }]).fetchImpl;
+  const bad = async (body) => (await desk.POST(new Request("http://x/api/desk", {
+    method: "POST", headers: { ...H, "content-type": "application/json" }, body: JSON.stringify(body),
+  }))).status;
+  assert.equal(await bad({ action: "save_view", name: "   " }), 400);
+  assert.equal(await bad({ action: "delete_view", view_id: 0 }), 400);
+  assert.equal(await bad({ action: "delete_view", view_id: "x" }), 400);
+}));
+
+test("desk API: deleting a view removes just that row", withEnv(async () => {
+  const { log, fetchImpl } = fakeSupabase([
+    { method: "GET", path: "saved_views", reply: [] },
+    { method: "DELETE", path: "saved_views", reply: [{ id: 3 }] },
+  ]);
+  globalThis.fetch = fetchImpl;
+  const res = await desk.POST(new Request("http://x/api/desk", {
+    method: "POST", headers: { ...H, "content-type": "application/json" },
+    body: JSON.stringify({ action: "delete_view", view_id: 3 }),
+  }));
+  assert.equal(res.status, 200);
+  const del = log.find((e) => e.method === "DELETE");
+  assert.ok(del.query.includes("id=eq.3"));
+}));
+
 test("desk API: an unknown tab is a 400", withEnv(async () => {
   globalThis.fetch = fakeSupabase([]).fetchImpl;
   const res = await desk.GET(new Request("http://x/api/desk?vertical=plumbers_on_mars", { headers: H }));

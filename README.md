@@ -136,8 +136,9 @@ Vercel and redeploy. Without them, searches still work but nothing is kept.
 
 Re-run `supabase/schema.sql` after pulling a change that touches it — every
 statement in it checks before it creates, so running it again is safe and is
-how an existing database picks up a new column. The Today tab needs the
-`leads.today_on` column it adds; without it the tab comes back empty.
+how an existing database picks up a new column or table. The Today tab needs
+the `leads.today_on` column it adds, and saved views need the `saved_views`
+table; without them the tab comes back empty and views cannot be kept.
 
 ## Using the dashboard
 
@@ -155,6 +156,17 @@ how an existing database picks up a new column. The Today tab needs the
 - On a vertical's tab, filter by To call / Hot / Warm / New / Worked, narrow
   to businesses open right now, and search by name, address or note. Today and
   the other composed tabs carry their own order and take no filter.
+- **Filters** opens the facet panel: track, a detected processor, financing,
+  confidence, never called, not touched in 7/14/30 days, has phone, no
+  website, a score range, market, and source. Facets stack — they are ANDed
+  with each other and ORed within one, so Displacement *or* Greenfield, but
+  track *and* no website. Each option carries the count you would get by
+  picking it, computed with its own facet relaxed. Whatever is on shows as a
+  removable chip under the toolbar.
+- **Save as view** keeps the current filter, facets and open-now toggle under
+  a name. Views are pills above the toolbar: click to apply, × to delete.
+  They live in the database, so one built at the desk is there on the phone,
+  and saving over a name replaces that view rather than adding a second.
 
 ## Tests
 
@@ -263,6 +275,7 @@ public/
   dashboard.css              styles
   dashboard.js               client rendering, filter/sort/copy
   today.js                   the Today list: what it holds and in what order
+  facets.js                  the filter facets and the pure logic that applies them
   desk-view.js               pure view logic: which leads a tab shows, how a row reads
   research.js                "who to ask for" deep links
   csv.js                     leads → CSV export
